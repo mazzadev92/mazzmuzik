@@ -255,4 +255,17 @@ export class SubsonicClient {
       return null;
     }
   }
+
+  async addToDownloadQueue(title, artist = '') {
+    try {
+      const res = await fetch(`${this.serverUrl}/api/queue/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, artist }),
+      });
+      return await res.json();
+    } catch (e) {
+      return { success: false, message: e.message };
+    }
+  }
 }

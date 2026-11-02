@@ -435,26 +435,21 @@ async function performSearch(query) {
       t.title.toLowerCase().includes(query.toLowerCase()) ||
       t.artist.toLowerCase().includes(query.toLowerCase())
     );
-    displaySearchResults({ songs: filtered, albums: [], artists: [] });
+    displaySearchResults({ songs: filtered, albums: [], artists: [] }, query);
     return;
   }
 
   const results = await client.search(query);
-  displaySearchResults(results);
+  displaySearchResults(results, query);
 }
 
-function displaySearchResults(results) {
+function displaySearchResults(results, query) {
   const container = document.getElementById('search-results');
   container.innerHTML = '';
 
-  if (results.songs.length === 0 && results.albums.length === 0 && results.artists.length === 0) {
-    container.innerHTML = '<p class="empty-state">Aucun résultat trouvé pour cette recherche.</p>';
-    return;
-  }
-
   if (results.songs.length > 0) {
     const sec = document.createElement('div');
-    sec.innerHTML = `<h3 style="margin-bottom: 12px; color: var(--primary);">Titres</h3>`;
+    sec.innerHTML = `<h3 style="margin-bottom: 12px; color: var(--primary);">Morceaux dans votre bibliothèque</h3>`;
     const table = document.createElement('table');
     table.className = 'tracks-table';
     table.innerHTML = `<tbody></tbody>`;
@@ -471,7 +466,40 @@ function displaySearchResults(results) {
     });
     sec.appendChild(table);
     container.appendChild(sec);
+  } else {
+    container.innerHTML = '<p class="empty-state" style="margin-bottom: 16px;">Ce morceau n\'est pas encore présent dans votre bibliothèque locale.</p>';
   }
+
+  // Boîte de téléchargement automatique depuis les sources publiques
+  const aggBox = document.createElement('div');
+  aggBox.className = 'search-aggregate-box';
+  aggBox.style.cssText = 'margin-top: 20px; padding: 20px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius);';
+  aggBox.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+      <div>
+        <h4 style="color: var(--text-main); margin-bottom: 4px; font-size: 14px;">📡 Télécharger depuis les sources publiques (Rap FR, etc.)</h4>
+        <p style="color: var(--text-muted); font-size: 12px;">Résolution anonyme en cascade (YT Music, YouTube, Deezer) avec taggage ID3 et paroles synchronisées .lrc.</p>
+      </div>
+      <button class="btn btn-primary" id="btn-resolve-download" style="white-space: nowrap;">⬇️ Télécharger « ${escapeHtml(query)} »</button>
+    </div>
+    <div id="resolve-feedback" style="margin-top: 10px; font-size: 12px; font-weight: 600;"></div>
+  `;
+
+  aggBox.querySelector('#btn-resolve-download').addEventListener('click', async () => {
+    const fb = aggBox.querySelector('#resolve-feedback');
+    fb.style.color = 'var(--text-muted)';
+    fb.textContent = 'Envoi de la demande au serveur Mazz MuZik...';
+    const res = await client.addToDownloadQueue(query);
+    if (res.success) {
+      fb.style.color = 'var(--accent)';
+      fb.textContent = ` ${res.message}`;
+    } else {
+      fb.style.color = '#ef4444';
+      fb.textContent = `Erreur : ${res.message}. Vérifiez que le serveur Mazz MuZik est démarré.`;
+    }
+  });
+
+  container.appendChild(aggBox);
 }
 
 // Player Functions

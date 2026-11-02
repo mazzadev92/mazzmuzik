@@ -7,6 +7,13 @@ use mazzmuzik_db::QueueRepository;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
+pub struct AddToQueuePayload {
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ResolveReviewPayload {
     pub approved: bool,
     pub selected_candidate_id: Option<String>,
@@ -64,6 +71,48 @@ pub async fn resolve_manual_review(
                 } else {
                     "Review rejected.".to_string()
                 },
+            }),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(SimpleStatusResponse {
+                success: false,
+                message: e.to_string(),
+            }),
+        ),
+    }
+}
+
+pub async fn add_to_queue(
+    State(state): State<AppState>,
+    Json(payload): Json<AddToQueuePayload>,
+) -> impl IntoResponse {
+    let clean_title = payload.title.trim();
+    if clean_title.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(SimpleStatusResponse {
+                success: false,
+                message: "Title cannot be empty".to_string(),
+            }),
+        );
+    }
+    let artist = payload.artist.as_deref().unwrap_or("Artiste inconnu");
+    let preferred_format = &state.config.library.preferred_format;
+
+    match QueueRepository::push(
+        &state.pool,
+        clean_title,
+        artist,
+        payload.album.as_deref(),
+        preferred_format,
+        0,
+    ).await {
+        Ok(item) => (
+            StatusCode::OK,
+            Json(SimpleStatusResponse {
+                success: true,
+                message: format!("Ajouté à la file de téléchargement : {} - {} (id: {})", artist, clean_title, item.id),
             }),
         ),
         Err(e) => (

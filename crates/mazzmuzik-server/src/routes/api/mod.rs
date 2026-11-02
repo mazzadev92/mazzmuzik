@@ -16,6 +16,7 @@ pub fn router() -> Router<AppState> {
         .route("/search", get(search::search_unified))
         .route("/import", post(import::import_playlist))
         .route("/queue", get(queue::list_queue))
+        .route("/queue/add", post(queue::add_to_queue))
         .route("/review", get(queue::list_manual_reviews))
         .route("/review/:id", post(queue::resolve_manual_review))
         .route("/library", get(library::get_stats))
