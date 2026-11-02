@@ -1,0 +1,23 @@
+[workspace]
+
+[package]
+name = "mazzmuzik-desktop"
+version = "0.1.0"
+description = "Mazz MuZik Desktop Player (Tauri v2)"
+authors = ["Mazz MuZik"]
+license = "GPL-3.0"
+edition = "2021"
+
+[lib]
+name = "mazzmuzik_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4" }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.5", features = ["tray-icon"] }
+tauri-plugin-log = "2"

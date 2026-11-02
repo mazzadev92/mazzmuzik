@@ -5,6 +5,9 @@ members = [
     "crates/mazzmuzik-db",
     "crates/mazzmuzik-server",
 ]
+exclude = [
+    "apps/mazzmuzik-desktop/src-tauri",
+]
 
 [workspace.package]
 version = "0.1.0"

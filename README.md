@@ -50,6 +50,11 @@ Mazz MuZik est structuré en monorepo :
   - Contrôles natifs Lock Screen et Control Center (`audio_service`).
   - Paroles synchronisées, recherche, playlists, gestion du serveur.
   - Sideload sans fil via SideStore ou TrollStore, CI GitHub Actions.
+- **`apps/mazzmuzik-desktop`** : Application de bureau Windows / macOS / Linux en **Tauri v2** (Rust + HTML5/CSS/JS).
+  - Lecteur de musique desktop ultra-léger (< 15 Mo), rapide, sans Chromium lourd.
+  - Raccourcis multimédia Windows (touches média, barre d'espace), contrôle du volume.
+  - Paroles synchronisées avec défilement automatique temps réel et navigation par clic.
+  - Connexion locale ou distante via le tunnel WireGuard `mazz0`.
 
 ---
 
@@ -80,6 +85,7 @@ cargo build --release
 ## Documentation
 
 - [Charte d'utilisation (texte intégral)](./docs/charte-utilisation.md)
+- [Guide de l'application Desktop (Tauri v2)](./docs/desktop-app.md)
 - [Guide d'installation iOS (SideStore / TrollStore)](./docs/sidestore-ios-setup.md)
 - [Guide de configuration WireGuard (`mazz0`)](./docs/wireguard-setup.md)
 

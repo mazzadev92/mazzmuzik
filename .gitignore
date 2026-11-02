@@ -29,6 +29,11 @@ apps/mazzmuzik-ios/ios/Flutter/Generated.xcconfig
 apps/mazzmuzik-ios/ios/Flutter/app.framework
 apps/mazzmuzik-ios/*.ipa
 
+# Desktop (Tauri / Node)
+apps/mazzmuzik-desktop/node_modules/
+apps/mazzmuzik-desktop/dist/
+apps/mazzmuzik-desktop/src-tauri/target/
+
 # IDE / OS
 .DS_Store
 Thumbs.db
