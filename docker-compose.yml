@@ -1,0 +1,22 @@
+services:
+  mazzmuzik:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mazzmuzik/server:latest
+    container_name: mazzmuzik
+    restart: unless-stopped
+    ports:
+      - "4040:4040"
+    environment:
+      - MAZZMUZIK_SERVER__HOST=0.0.0.0
+      - MAZZMUZIK_SERVER__PORT=4040
+      - MAZZMUZIK_DATABASE__URL=sqlite:///data/mazzmuzik.db
+      - MAZZMUZIK_STORAGE__MUSIC_DIR=/music
+      - MAZZMUZIK_STORAGE__DATA_DIR=/data
+      - MAZZMUZIK_DOWNLOADER__USER_AGENT=MazzMuZik/0.1
+      - RUST_LOG=info,mazzmuzik_server=debug,mazzmuzik_core=debug
+    volumes:
+      - ./music:/music
+      - ./data:/data
+      - ./config:/config

@@ -1,0 +1,70 @@
+# Configuration type de Mazz MuZik
+# Fichier lu par défaut depuis ~/.config/mazzmuzik/mazzmuzik.toml ou via MAZZMUZIK_CONFIG_PATH
+
+[server]
+host = "0.0.0.0"
+port = 4040
+# URL publique ou IP locale / WireGuard annoncée aux clients
+base_url = "http://127.0.0.1:4040"
+# Clé secrète pour les sessions et tokens internes
+secret_key = "changez-moi-en-production-avec-une-cle-secrete-aleatoire"
+
+[database]
+# Chemin vers le fichier SQLite (ou MAZZMUZIK_DATABASE_URL)
+path = "mazzmuzik.db"
+# Timeout en secondes lors des écritures concurrentes SQLite
+busy_timeout_secs = 10
+
+[library]
+# Répertoire où sont rangés les fichiers audio : Artiste/Album/TT - Titre.ext
+music_dir = "music"
+# Format audio cible par défaut : "flac", "opus", "mp3"
+preferred_format = "flac"
+# Dédoublonnage automatique par empreinte audio
+deduplicate = true
+
+[resolver]
+# Seuil de confiance minimal (entre 0.0 et 1.0).
+# Au-dessus : téléchargement automatique.
+# En-dessous : mise en attente dans la file d'arbitrage manuel.
+confidence_threshold = 0.78
+# Tolérance d'écart de durée sans pénalité (en secondes)
+duration_tolerance_secs = 3
+# Durée de vie du cache de résolution (en jours)
+cache_ttl_days = 7
+# Ordre strict de la cascade de résolution
+provider_order = [
+    "ytmusic",
+    "youtube",
+    "deezer",
+    "soundcloud",
+    "bandcamp",
+    "audius",
+    "soulseek"
+]
+
+[downloader]
+# Nombre de téléchargements simultanés maximum
+max_concurrent_downloads = 2
+# Limite de bande passante par téléchargement (0 = illimité, ex: 1048576 pour 1 Mo/s)
+rate_limit_bytes_per_sec = 0
+# Exécutable yt-dlp (dans le PATH ou chemin direct)
+ytdlp_path = "yt-dlp"
+# User-Agent envoyé par yt-dlp
+user_agent = "MazzMuZik/0.1"
+# Support PoToken via bgutil pour garantir la pérennité du mode anonyme YouTube
+potoken_bgutil_enabled = true
+# URL du helper HTTP local bgutil s'il est exécuté en daemon
+potoken_bgutil_url = "http://127.0.0.1:4444"
+# Fichier cookies optionnel (uniquement pour vidéos avec limite d'âge)
+cookies_path = ""
+
+[metadata]
+# Activé pour l'enrichissement canonique MusicBrainz (recommandations et pochettes)
+musicbrainz_enabled = true
+# Activé pour la récupération des paroles synchronisées (.lrc)
+lrclib_enabled = true
+
+[subsonic]
+# Nom du serveur exposé aux clients OpenSubsonic (Amperfy, substreamer, etc.)
+server_name = "Mazz MuZik"

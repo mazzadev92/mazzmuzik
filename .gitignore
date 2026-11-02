@@ -1,0 +1,36 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# SQLite & Data
+*.db
+*.db-shm
+*.db-wal
+data/
+music/
+
+# Logs & Temp
+*.log
+tmp/
+.temp/
+
+# Flutter / Dart / iOS
+apps/mazzmuzik-ios/.dart_tool/
+apps/mazzmuzik-ios/.flutter-plugins
+apps/mazzmuzik-ios/.flutter-plugins-dependencies
+apps/mazzmuzik-ios/.packages
+apps/mazzmuzik-ios/build/
+apps/mazzmuzik-ios/ios/Pods/
+apps/mazzmuzik-ios/ios/.symlinks/
+apps/mazzmuzik-ios/ios/Flutter/Flutter.framework
+apps/mazzmuzik-ios/ios/Flutter/Flutter.podspec
+apps/mazzmuzik-ios/ios/Flutter/Generated.xcconfig
+apps/mazzmuzik-ios/ios/Flutter/app.framework
+apps/mazzmuzik-ios/*.ipa
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
