@@ -10,6 +10,7 @@ let currentLyrics = [];
 let activeLyricIdx = -1;
 let isShuffle = false;
 let isRepeat = false;
+let isDemoMode = false;
 
 // DOM Elements
 const views = document.querySelectorAll('.view-panel');
@@ -17,8 +18,19 @@ const navItems = document.querySelectorAll('.nav-item');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 
+const offlineBanner = document.getElementById('offline-banner');
+const bannerUrl = document.getElementById('banner-url');
+const bannerRetryBtn = document.getElementById('banner-retry-btn');
+const bannerDemoBtn = document.getElementById('banner-demo-btn');
+const bannerSettingsBtn = document.getElementById('banner-settings-btn');
+
 const tracksTbody = document.getElementById('tracks-tbody');
 const tracksCount = document.getElementById('tracks-count');
+const tracksEmpty = document.getElementById('tracks-empty');
+const tracksTableContainer = document.getElementById('tracks-table-container');
+const tracksRetryBtn = document.getElementById('tracks-retry-btn');
+const tracksDemoBtn = document.getElementById('tracks-demo-btn');
+
 const albumsGrid = document.getElementById('albums-grid');
 const albumsCount = document.getElementById('albums-count');
 const artistsGrid = document.getElementById('artists-grid');
@@ -45,6 +57,7 @@ const lyricsList = document.getElementById('lyrics-list');
 
 const quickSearchInput = document.getElementById('quick-search');
 const refreshBtn = document.getElementById('refresh-btn');
+const demoToggleBtn = document.getElementById('demo-toggle-btn');
 
 // Config DOM
 const cfgUrl = document.getElementById('cfg-url');
@@ -54,11 +67,62 @@ const cfgSaveBtn = document.getElementById('cfg-save-btn');
 const cfgTestBtn = document.getElementById('cfg-test-btn');
 const cfgFeedback = document.getElementById('cfg-feedback');
 
-// Init
+// Sample Demo Data (for testing when server is offline)
+const DEMO_TRACKS = [
+  {
+    id: 'demo-1',
+    title: 'Clair de Lune',
+    artist: 'Claude Debussy',
+    album: 'Suite Bergamasque',
+    duration: 180,
+    streamUrl: 'https://cdn.pixabay.com/download/audio/2022/05/16/audio_c89bdf1103.mp3?filename=debussy-clair-de-lune-111162.mp3',
+    lyrics: `[00:00.00]Votre âme est un paysage choisi
+[00:06.00]Que vont charmant masques et bergamasques
+[00:13.00]Jouant du luth et dansant et quasi
+[00:20.00]Tristes sous leurs déguisements fantasques.
+[00:28.00]Tout en chantant sur le mode mineur
+[00:36.00]L'amour vainqueur et la vie opportune,
+[00:44.00]Ils n'ont pas l'air de croire à leur bonheur
+[00:52.00]Et leur chanson se mêle au clair de lune,
+[01:00.00]Au calme clair de lune triste et beau,
+[01:10.00]Qui fait rêver les oiseaux dans les arbres
+[01:20.00]Et sangloter d'extase les jets d'eau,
+[01:30.00]Les grands jets d'eau sveltes parmi les marbres.`
+  },
+  {
+    id: 'demo-2',
+    title: 'Gymnopédie No. 1',
+    artist: 'Erik Satie',
+    album: 'Trois Gymnopédies',
+    duration: 195,
+    streamUrl: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c6f2e20d20.mp3?filename=erik-satie-gymnopedie-no-1-105151.mp3',
+    lyrics: `[00:00.00](Thème mélodique lent et contemplatif)
+[00:15.00]Gymnopédie numéro un - Erik Satie
+[00:30.00]Composée à Paris en 1888
+[00:45.00]Harmonies épurées et atmosphériques
+[01:00.00]Mazz MuZik - Lecture et synchronisation des paroles`
+  },
+  {
+    id: 'demo-3',
+    title: 'Canon in D Major',
+    artist: 'Johann Pachelbel',
+    album: 'Baroque Masterpieces',
+    duration: 210,
+    streamUrl: 'https://cdn.pixabay.com/download/audio/2021/11/01/audio_00a7b4618a.mp3?filename=canon-in-d-major-6754.mp3',
+    lyrics: `[00:00.00]Basse continue en Ré majeur
+[00:12.00]Entrée du premier violon
+[00:24.00]Entrée du second violon en imitation canonique
+[00:36.00]Polyphonie baroque à trois voix
+[00:50.00]Mazz MuZik Player`
+  }
+];
+
+// Initialization
 window.addEventListener('DOMContentLoaded', async () => {
   cfgUrl.value = client.serverUrl;
   cfgUser.value = client.username;
   cfgPass.value = client.password;
+  bannerUrl.textContent = client.serverUrl;
 
   audio.volume = parseFloat(volSlider.value);
 
@@ -134,11 +198,34 @@ function setupEventListeners() {
     }, 300);
   });
 
-  refreshBtn.addEventListener('click', loadAllData);
+  refreshBtn.addEventListener('click', () => {
+    isDemoMode = false;
+    demoToggleBtn.textContent = '🎵 Démo';
+    checkConnectionAndLoad();
+  });
+
+  demoToggleBtn.addEventListener('click', () => {
+    if (isDemoMode) {
+      isDemoMode = false;
+      demoToggleBtn.textContent = '🎵 Démo';
+      checkConnectionAndLoad();
+    } else {
+      loadDemoData();
+    }
+  });
+
+  // Banner Actions
+  bannerRetryBtn.addEventListener('click', checkConnectionAndLoad);
+  bannerDemoBtn.addEventListener('click', loadDemoData);
+  bannerSettingsBtn.addEventListener('click', () => switchView('settings'));
+
+  tracksRetryBtn.addEventListener('click', checkConnectionAndLoad);
+  tracksDemoBtn.addEventListener('click', loadDemoData);
 
   // Settings Actions
   cfgSaveBtn.addEventListener('click', () => {
     client.saveConfig(cfgUrl.value.trim(), cfgUser.value.trim(), cfgPass.value);
+    bannerUrl.textContent = client.serverUrl;
     cfgFeedback.className = 'feedback-msg success';
     cfgFeedback.textContent = 'Configuration enregistrée !';
     checkConnectionAndLoad();
@@ -148,6 +235,7 @@ function setupEventListeners() {
     cfgFeedback.className = 'feedback-msg';
     cfgFeedback.textContent = 'Test en cours...';
     client.saveConfig(cfgUrl.value.trim(), cfgUser.value.trim(), cfgPass.value);
+    bannerUrl.textContent = client.serverUrl;
     const ok = await client.ping();
     if (ok) {
       cfgFeedback.className = 'feedback-msg success';
@@ -155,7 +243,7 @@ function setupEventListeners() {
       updateStatus(true);
     } else {
       cfgFeedback.className = 'feedback-msg error';
-      cfgFeedback.textContent = 'Échec de connexion au serveur.';
+      cfgFeedback.textContent = 'Échec : le serveur ne répond pas sur ce port.';
       updateStatus(false);
     }
   });
@@ -182,6 +270,7 @@ function switchView(viewName) {
 function updateStatus(online) {
   statusDot.classList.toggle('online', online);
   statusText.textContent = online ? 'Connecté' : 'Déconnecté';
+  offlineBanner.classList.toggle('hidden', online);
 }
 
 async function checkConnectionAndLoad() {
@@ -189,7 +278,18 @@ async function checkConnectionAndLoad() {
   updateStatus(online);
   if (online) {
     await loadAllData();
+  } else {
+    showEmptyState(true);
   }
+}
+
+function showEmptyState(isOffline) {
+  tracksEmpty.classList.remove('hidden');
+  tracksTableContainer.classList.add('hidden');
+  tracksCount.textContent = '0 titre';
+  document.getElementById('tracks-empty-msg').textContent = isOffline
+    ? `Le serveur Mazz MuZik n'est pas accessible sur ${client.serverUrl}. Démarrez le serveur (cargo run ou docker compose) ou chargez le mode démo pour tester.`
+    : 'Votre serveur est connecté mais aucune piste n\'a encore été importée.';
 }
 
 async function loadAllData() {
@@ -202,8 +302,16 @@ async function loadAllData() {
 
 async function loadTracks() {
   const songs = await client.getRandomSongs(100);
+  if (songs.length === 0) {
+    showEmptyState(false);
+    return;
+  }
+
+  tracksEmpty.classList.add('hidden');
+  tracksTableContainer.classList.remove('hidden');
   tracksCount.textContent = `${songs.length} titres`;
   tracksTbody.innerHTML = '';
+
   songs.forEach((s, idx) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -258,10 +366,85 @@ async function loadArtists() {
   });
 }
 
+// Mode Démo pour tester immédiatement le lecteur et les paroles
+function loadDemoData() {
+  isDemoMode = true;
+  demoToggleBtn.textContent = ' Quitter Démo';
+  offlineBanner.classList.add('hidden');
+  tracksEmpty.classList.add('hidden');
+  tracksTableContainer.classList.remove('hidden');
+
+  tracksCount.textContent = `${DEMO_TRACKS.length} titres (Démo)`;
+  tracksTbody.innerHTML = '';
+
+  DEMO_TRACKS.forEach((s, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td><strong>${escapeHtml(s.title)}</strong></td>
+      <td>${escapeHtml(s.artist)}</td>
+      <td>${escapeHtml(s.album)}</td>
+      <td>${formatTime(s.duration)}</td>
+    `;
+    tr.addEventListener('click', () => {
+      playTrackList(DEMO_TRACKS, idx);
+    });
+    tracksTbody.appendChild(tr);
+  });
+
+  // Albums démo
+  albumsCount.textContent = '3 albums (Démo)';
+  albumsGrid.innerHTML = '';
+  DEMO_TRACKS.forEach((s, idx) => {
+    const card = document.createElement('div');
+    card.className = 'album-card';
+    card.innerHTML = `
+      <div class="card-cover">💿</div>
+      <div class="card-title">${escapeHtml(s.album)}</div>
+      <div class="card-sub">${escapeHtml(s.artist)}</div>
+    `;
+    card.addEventListener('click', () => playTrackList(DEMO_TRACKS, idx));
+    albumsGrid.appendChild(card);
+  });
+
+  // Artistes démo
+  artistsCount.textContent = '3 artistes (Démo)';
+  artistsGrid.innerHTML = '';
+  DEMO_TRACKS.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'artist-card';
+    card.innerHTML = `
+      <div class="card-cover">🎙️</div>
+      <div class="card-title">${escapeHtml(s.artist)}</div>
+      <div class="card-sub">1 album</div>
+    `;
+    artistsGrid.appendChild(card);
+  });
+
+  // Lancer la première piste démo automatiquement
+  playTrackList(DEMO_TRACKS, 0);
+  switchView('tracks');
+}
+
 async function performSearch(query) {
   const container = document.getElementById('search-results');
   container.innerHTML = '<p class="empty-state">Recherche en cours...</p>';
+
+  if (isDemoMode) {
+    const filtered = DEMO_TRACKS.filter(t =>
+      t.title.toLowerCase().includes(query.toLowerCase()) ||
+      t.artist.toLowerCase().includes(query.toLowerCase())
+    );
+    displaySearchResults({ songs: filtered, albums: [], artists: [] });
+    return;
+  }
+
   const results = await client.search(query);
+  displaySearchResults(results);
+}
+
+function displaySearchResults(results) {
+  const container = document.getElementById('search-results');
   container.innerHTML = '';
 
   if (results.songs.length === 0 && results.albums.length === 0 && results.artists.length === 0) {
@@ -304,6 +487,13 @@ async function loadCurrentTrack() {
 
   playerTitle.textContent = track.title || 'Sans titre';
   playerArtist.textContent = track.artist || 'Artiste inconnu';
+
+  if (isDemoMode && track.streamUrl) {
+    audio.src = track.streamUrl;
+    audio.play().catch(() => {});
+    parseAndDisplayLyrics(track.lyrics);
+    return;
+  }
 
   const streamUrl = client.buildStreamUrl(track.id);
   audio.src = streamUrl;
@@ -374,8 +564,16 @@ async function loadLyrics(artist, title) {
     return;
   }
 
-  // Parse LRC
-  const lines = raw.split('\n');
+  parseAndDisplayLyrics(raw);
+}
+
+function parseAndDisplayLyrics(rawLrc) {
+  if (!rawLrc) {
+    lyricsList.innerHTML = '<p class="lyrics-empty">Aucune parole disponible</p>';
+    return;
+  }
+
+  const lines = rawLrc.split('\n');
   const parsed = [];
   const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
 
@@ -395,12 +593,12 @@ async function loadLyrics(artist, title) {
   currentLyrics = parsed;
 
   if (currentLyrics.length === 0) {
-    lyricsList.innerHTML = `<div class="lyric-line">${escapeHtml(raw)}</div>`;
+    lyricsList.innerHTML = `<div class="lyric-line">${escapeHtml(rawLrc)}</div>`;
     return;
   }
 
   lyricsList.innerHTML = '';
-  currentLyrics.forEach((item, idx) => {
+  currentLyrics.forEach((item) => {
     const div = document.createElement('div');
     div.className = 'lyric-line';
     div.textContent = item.text || '...';
@@ -440,7 +638,7 @@ function formatTime(seconds) {
   if (isNaN(seconds) || seconds < 0) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padLeft ? s.toString().padStart(2, '0') : (s < 10 ? '0' + s : s)}`;
+  return `${m}:${s < 10 ? '0' + s : s}`;
 }
 
 function escapeHtml(str) {

@@ -45,12 +45,24 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
+      <div id="offline-banner" class="offline-banner hidden">
+        <span>⚠️ <strong>Serveur non détecté</strong> sur <code id="banner-url">http://127.0.0.1:4040</code>. Assurez-vous que le serveur Mazz MuZik est démarré.</span>
+        <div class="banner-actions">
+          <button id="banner-retry-btn" class="btn btn-sm btn-secondary">Réessayer</button>
+          <button id="banner-demo-btn" class="btn btn-sm btn-accent">Mode Démo</button>
+          <button id="banner-settings-btn" class="btn btn-sm btn-secondary">Réglages</button>
+        </div>
+      </div>
+
       <header class="top-bar">
         <div class="search-box">
           <span class="search-icon">🔍</span>
           <input type="text" id="quick-search" placeholder="Rechercher un titre, artiste, album..." />
         </div>
-        <button id="refresh-btn" class="btn btn-secondary">Actualiser</button>
+        <div class="top-bar-actions">
+          <button id="demo-toggle-btn" class="btn btn-secondary">🎵 Démo</button>
+          <button id="refresh-btn" class="btn btn-secondary">Actualiser</button>
+        </div>
       </header>
 
       <div class="content-body">
@@ -60,7 +72,16 @@
             <h2>Tous les morceaux</h2>
             <span class="count-badge" id="tracks-count">0 titre</span>
           </div>
-          <div class="table-container">
+          <div id="tracks-empty" class="empty-state-card hidden">
+            <div class="empty-icon">🎵</div>
+            <h3>Aucun morceau disponible</h3>
+            <p id="tracks-empty-msg">Le serveur Mazz MuZik n'est pas connecté ou votre bibliothèque est encore vide.</p>
+            <div class="empty-actions">
+              <button id="tracks-retry-btn" class="btn btn-primary">Tester la connexion</button>
+              <button id="tracks-demo-btn" class="btn btn-secondary">Charger la démo</button>
+            </div>
+          </div>
+          <div class="table-container" id="tracks-table-container">
             <table class="tracks-table">
               <thead>
                 <tr>
@@ -126,6 +147,14 @@
               <button id="cfg-save-btn" class="btn btn-primary">Enregistrer</button>
               <button id="cfg-test-btn" class="btn btn-secondary">Tester la connexion</button>
               <span id="cfg-feedback" class="feedback-msg"></span>
+            </div>
+
+            <div class="server-help">
+              <h4>Comment démarrer le serveur Mazz MuZik ?</h4>
+              <p>Dans un terminal à la racine du projet :</p>
+              <code>cargo run --release -p mazzmuzik-server</code>
+              <p>ou avec Docker :</p>
+              <code>docker compose up -d</code>
             </div>
           </div>
         </section>
