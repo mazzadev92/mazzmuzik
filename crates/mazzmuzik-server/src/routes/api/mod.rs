@@ -4,6 +4,7 @@ pub mod library;
 pub mod queue;
 pub mod recommendations;
 pub mod search;
+pub mod stream;
 
 use axum::routing::{get, post};
 use axum::Router;
@@ -14,6 +15,8 @@ pub fn router() -> Router<AppState> {
         .route("/setup", post(auth::setup_first_user))
         .route("/auth/login", post(auth::login))
         .route("/search", get(search::search_unified))
+        .route("/stream/live", get(stream::stream_live))
+        .route("/stream/url", get(stream::get_stream_url))
         .route("/import", post(import::import_playlist))
         .route("/queue", get(queue::list_queue))
         .route("/queue/add", post(queue::add_to_queue))

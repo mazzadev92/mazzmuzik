@@ -13,6 +13,7 @@ pub struct AppState {
     pub processor: Arc<QueueProcessor>,
     pub importer: Arc<UniversalPlaylistImporter>,
     pub resolver: Arc<CascadeResolver>,
+    pub downloader: Arc<YtDlpDownloader>,
 }
 
 impl AppState {
@@ -45,7 +46,7 @@ impl AppState {
 
         let processor = Arc::new(QueueProcessor::new(
             resolver.clone(),
-            downloader,
+            downloader.clone(),
             musicbrainz,
             lrclib,
         ));
@@ -58,6 +59,7 @@ impl AppState {
             processor,
             importer,
             resolver,
+            downloader,
         }
     }
 }

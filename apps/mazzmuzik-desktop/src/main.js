@@ -470,21 +470,38 @@ function displaySearchResults(results, query) {
     container.innerHTML = '<p class="empty-state" style="margin-bottom: 16px;">Ce morceau n\'est pas encore présent dans votre bibliothèque locale.</p>';
   }
 
-  // Boîte de téléchargement automatique depuis les sources publiques
+  // Boîte d'écoute directe et de téléchargement depuis les sources publiques
   const aggBox = document.createElement('div');
   aggBox.className = 'search-aggregate-box';
   aggBox.style.cssText = 'margin-top: 20px; padding: 20px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius);';
   aggBox.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
       <div>
-        <h4 style="color: var(--text-main); margin-bottom: 4px; font-size: 14px;">📡 Télécharger depuis les sources publiques (Rap FR, etc.)</h4>
-        <p style="color: var(--text-muted); font-size: 12px;">Résolution anonyme en cascade (YT Music, YouTube, Deezer) avec taggage ID3 et paroles synchronisées .lrc.</p>
+        <h4 style="color: var(--text-main); margin-bottom: 4px; font-size: 14px;">📡 Sources publiques (Rap FR, etc.) : « ${escapeHtml(query)} »</h4>
+        <p style="color: var(--text-muted); font-size: 12px;">Écoutez instantanément en streaming direct sans rien enregistrer, ou téléchargez dans votre bibliothèque.</p>
       </div>
-      <button class="btn btn-primary" id="btn-resolve-download" style="white-space: nowrap;">⬇️ Télécharger « ${escapeHtml(query)} »</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-accent" id="btn-live-stream" style="white-space: nowrap;">▶️ Écouter en direct</button>
+        <button class="btn btn-secondary" id="btn-resolve-download" style="white-space: nowrap;">⬇️ Télécharger</button>
+      </div>
     </div>
     <div id="resolve-feedback" style="margin-top: 10px; font-size: 12px; font-weight: 600;"></div>
   `;
 
+  // Écoute en streaming direct sans téléchargement préalable
+  aggBox.querySelector('#btn-live-stream').addEventListener('click', () => {
+    const liveStreamUrl = `${client.serverUrl}/api/stream/live?q=${encodeURIComponent(query)}`;
+    playerTitle.textContent = query;
+    playerArtist.textContent = 'Streaming direct (sources publiques)';
+    audio.src = liveStreamUrl;
+    audio.play().catch(() => {});
+    loadLyrics('', query);
+    const fb = aggBox.querySelector('#resolve-feedback');
+    fb.style.color = 'var(--accent)';
+    fb.textContent = `▶️ Démarrage du streaming direct pour « ${query} »...`;
+  });
+
+  // Téléchargement pour conservation permanente
   aggBox.querySelector('#btn-resolve-download').addEventListener('click', async () => {
     const fb = aggBox.querySelector('#resolve-feedback');
     fb.style.color = 'var(--text-muted)';

@@ -121,4 +121,54 @@ impl YtDlpDownloader {
         info!("Download completed successfully: {:?}", final_path);
         Ok(final_path)
     }
+
+    /// Extrait directement l'URL du flux audio public pour le streaming direct à la volée (sans téléchargement sur disque)
+    pub async fn get_stream_url(&self, query_or_url: &str) -> Result<String, CoreError> {
+        let potoken = self.potoken_provider.get_token().await.unwrap_or(None);
+        let mut cmd = Command::new(&self.config.ytdlp_path);
+
+        cmd.arg("--no-playlist")
+            .arg("--no-warnings")
+            .arg("--no-colors")
+            .arg("--user-agent")
+            .arg(&self.config.user_agent)
+            .arg("--js-runtimes")
+            .arg("node")
+            .arg("-g")
+            .arg("-f")
+            .arg("bestaudio");
+
+        for arg in self.potoken_provider.build_extractor_args(potoken.as_deref()) {
+            cmd.arg(arg);
+        }
+
+        if let Some(cookies) = &self.config.cookies_path {
+            if !cookies.trim().is_empty() && Path::new(cookies).exists() {
+                cmd.arg("--cookies").arg(cookies);
+            }
+        }
+
+        let target = if query_or_url.starts_with("http://") || query_or_url.starts_with("https://") {
+            query_or_url.to_string()
+        } else {
+            format!("ytsearch1:{}", query_or_url)
+        };
+        cmd.arg(&target);
+
+        let output = cmd.output().await.map_err(|e| {
+            CoreError::Download(format!("Failed to spawn yt-dlp: {}", e))
+        })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(CoreError::Download(format!("yt-dlp stream extraction error: {}", stderr)));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let url = stdout.lines().next().unwrap_or("").trim().to_string();
+        if url.is_empty() {
+            return Err(CoreError::Download("No stream URL extracted".to_string()));
+        }
+        Ok(url)
+    }
 }
