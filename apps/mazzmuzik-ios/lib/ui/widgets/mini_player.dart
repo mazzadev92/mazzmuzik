@@ -26,16 +26,17 @@ class MiniPlayer extends StatelessWidget {
         );
       },
       child: Container(
-        height: 64,
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        height: 66,
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
-          borderRadius: BorderRadius.circular(12),
+          color: MazzTheme.obsidianSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: MazzTheme.obsidianBorder, width: 1.0),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -43,17 +44,29 @@ class MiniPlayer extends StatelessWidget {
           children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
                     Container(
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: AppTheme.cardColor,
-                        borderRadius: BorderRadius.circular(8),
+                        color: MazzTheme.forest,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: MazzTheme.obsidianBorder, width: 1.0),
                       ),
-                      child: const Icon(Icons.music_note, color: AppTheme.primaryColor),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset(
+                          'assets/logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) => const Icon(
+                            Icons.spa_rounded,
+                            color: MazzTheme.champagne,
+                            size: 24,
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -66,17 +79,18 @@ class MiniPlayer extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: AppTheme.textPrimary,
+                              color: MazzTheme.apexWhite,
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: AppTheme.textSecondary,
+                              color: MazzTheme.sageGreen,
                               fontSize: 12,
                             ),
                           ),
@@ -85,14 +99,16 @@ class MiniPlayer extends StatelessWidget {
                     ),
                     IconButton(
                       icon: Icon(
-                        playerState.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                        color: AppTheme.primaryColor,
-                        size: 36,
+                        playerState.isPlaying
+                            ? Icons.pause_circle_filled_rounded
+                            : Icons.play_circle_filled_rounded,
+                        color: MazzTheme.champagne,
+                        size: 38,
                       ),
                       onPressed: playerState.playPause,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.skip_next, color: AppTheme.textPrimary),
+                      icon: const Icon(Icons.skip_next_rounded, color: MazzTheme.apexWhite, size: 28),
                       onPressed: playerState.next,
                     ),
                   ],
@@ -101,9 +117,9 @@ class MiniPlayer extends StatelessWidget {
             ),
             LinearProgressIndicator(
               value: progress,
-              backgroundColor: AppTheme.cardColor,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-              minHeight: 2,
+              backgroundColor: MazzTheme.obsidianBorder,
+              valueColor: const AlwaysStoppedAnimation<Color>(MazzTheme.champagne),
+              minHeight: 2.0,
             ),
           ],
         ),

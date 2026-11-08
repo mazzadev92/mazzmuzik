@@ -1,0 +1,23 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm --prefix apps/mazzmuzik-desktop install && npm --prefix apps/mazzmuzik-desktop run build",
+  "outputDirectory": "apps/mazzmuzik-desktop/dist",
+  "rewrites": [
+    {
+      "source": "/api/deezer/:match*",
+      "destination": "https://api.deezer.com/:match*"
+    },
+    {
+      "source": "/api/ytmusic/:match*",
+      "destination": "https://music.youtube.com/:match*"
+    },
+    {
+      "source": "/api/lyrics/:match*",
+      "destination": "https://lrclib.net/:match*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

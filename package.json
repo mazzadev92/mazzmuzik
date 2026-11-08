@@ -1,0 +1,9 @@
+{
+  "name": "mazzmuzik-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix apps/mazzmuzik-desktop run build"
+  }
+}

@@ -2,7 +2,7 @@
 
 [package]
 name = "mazzmuzik-desktop"
-version = "0.1.0"
+version = "1.0.0"
 description = "Mazz MuZik Desktop Player (Tauri v2)"
 authors = ["Mazz MuZik"]
 license = "GPL-3.0"
@@ -10,17 +10,29 @@ edition = "2021"
 
 [lib]
 name = "mazzmuzik_desktop_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["lib"]
 
 [build-dependencies]
-tauri-build = { version = "2.7.4", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.12.5", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-log = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-store = "2"
+tauri-plugin-http = "2"
+tauri-plugin-opener = "2"
+uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
 
 [profile.dev]
 debug = 1
@@ -28,6 +40,6 @@ incremental = false
 
 [profile.release]
 debug = 0
-opt-level = 2
-codegen-units = 1
+opt-level = 0
+codegen-units = 16
 lto = false

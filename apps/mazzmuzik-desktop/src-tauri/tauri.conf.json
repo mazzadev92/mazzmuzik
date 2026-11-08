@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Mazz MuZik",
-  "version": "0.1.0",
-  "identifier": "fun.mazzmuzik.desktop",
+  "productName": "MazzMuziK",
+  "version": "1.0.0",
+  "identifier": "ai.mazz.mazzmuzik",
   "build": {
     "frontendDist": "../dist",
     "beforeBuildCommand": "npm run build"
@@ -10,9 +10,10 @@
   "app": {
     "windows": [
       {
-        "title": "Mazz MuZik",
-        "width": 1200,
-        "height": 800,
+        "title": "MazzMuziK",
+        "label": "main",
+        "width": 1280,
+        "height": 820,
         "minWidth": 960,
         "minHeight": 640,
         "resizable": true,
@@ -26,6 +27,21 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    },
+    "externalBin": [
+      "binaries/yt-dlp",
+      "binaries/ffmpeg",
+      "binaries/node",
+      "binaries/deno",
+      "binaries/fpcalc",
+      "binaries/bgutil-provider"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

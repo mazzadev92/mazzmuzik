@@ -33,6 +33,16 @@ apps/mazzmuzik-ios/*.ipa
 apps/mazzmuzik-desktop/node_modules/
 apps/mazzmuzik-desktop/dist/
 apps/mazzmuzik-desktop/src-tauri/target/
+node_modules/
+dist/
+dist-portable/
+**/dist-portable/
+
+# Binaries & Executables (100MB+ rejected by GitHub)
+*.exe
+*.msi
+binaries/
+**/binaries/
 
 # IDE / OS
 .DS_Store

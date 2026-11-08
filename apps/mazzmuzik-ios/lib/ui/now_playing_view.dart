@@ -21,7 +21,7 @@ class _NowPlayingViewState extends State<NowPlayingView> {
     if (_showLyrics && widget.playerState.lyrics.isNotEmpty) {
       final activeIndex = widget.playerState.activeLyricIndex;
       if (activeIndex >= 0 && _lyricsScrollController.hasClients) {
-        final targetOffset = activeIndex * 44.0;
+        final targetOffset = activeIndex * 48.0;
         _lyricsScrollController.animateTo(
           targetOffset,
           duration: const Duration(milliseconds: 300),
@@ -45,7 +45,13 @@ class _NowPlayingViewState extends State<NowPlayingView> {
         final track = widget.playerState.currentTrack;
         if (track == null) {
           return const Scaffold(
-            body: Center(child: Text('Aucune lecture en cours')),
+            backgroundColor: MazzTheme.obsidian,
+            body: Center(
+              child: Text(
+                'Aucune lecture en cours',
+                style: TextStyle(color: MazzTheme.warmStone),
+              ),
+            ),
           );
         }
 
@@ -55,23 +61,37 @@ class _NowPlayingViewState extends State<NowPlayingView> {
         final currentPosMs = pos.inMilliseconds.toDouble().clamp(0.0, maxDurMs);
 
         return Scaffold(
-          backgroundColor: AppTheme.backgroundColor,
+          backgroundColor: MazzTheme.obsidian,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down, size: 32),
+              icon: const Icon(Icons.keyboard_arrow_down, size: 30, color: MazzTheme.apexWhite),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            title: Text(
-              track.album ?? 'Mazz MuZik',
-              style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+            centerTitle: true,
+            title: Column(
+              children: [
+                const Text(
+                  'MAZZ MUZIK',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2.5,
+                    color: MazzTheme.champagne,
+                  ),
+                ),
+                Text(
+                  track.album ?? 'Engineering Tomorrow',
+                  style: const TextStyle(fontSize: 11, color: MazzTheme.eucalyptus),
+                ),
+              ],
             ),
             actions: [
               IconButton(
                 icon: Icon(
                   _showLyrics ? Icons.music_note : Icons.subtitles,
-                  color: _showLyrics ? AppTheme.accentColor : AppTheme.textSecondary,
+                  color: _showLyrics ? MazzTheme.champagne : MazzTheme.eucalyptus,
                 ),
                 tooltip: 'Paroles synchronisées',
                 onPressed: () {
@@ -88,7 +108,7 @@ class _NowPlayingViewState extends State<NowPlayingView> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Pochette ou Paroles
+                  // Pochette Bioforge Leaf ou Paroles
                   Expanded(
                     flex: 5,
                     child: _showLyrics ? _buildLyricsView() : _buildCoverArtView(track),
@@ -108,34 +128,46 @@ class _NowPlayingViewState extends State<NowPlayingView> {
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
+                            letterSpacing: 0.4,
+                            color: MazzTheme.apexWhite,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 16,
-                            color: AppTheme.textSecondary,
+                            fontSize: 15,
+                            color: MazzTheme.sageGreen,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // Seek bar
+                  // Barre de défilement (Seek Bar)
                   Column(
                     children: [
-                      Slider(
-                        value: currentPosMs,
-                        min: 0.0,
-                        max: maxDurMs,
-                        onChanged: (val) {
-                          widget.playerState.seek(Duration(milliseconds: val.toInt()));
-                        },
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: MazzTheme.champagne,
+                          inactiveTrackColor: MazzTheme.obsidianBorder,
+                          thumbColor: MazzTheme.champagne,
+                          overlayColor: MazzTheme.champagneGlow,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                          trackHeight: 2.5,
+                        ),
+                        child: Slider(
+                          value: currentPosMs,
+                          min: 0.0,
+                          max: maxDurMs,
+                          onChanged: (val) {
+                            widget.playerState.seek(Duration(milliseconds: val.toInt()));
+                          },
+                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -144,11 +176,11 @@ class _NowPlayingViewState extends State<NowPlayingView> {
                           children: [
                             Text(
                               _formatDuration(pos),
-                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                              style: const TextStyle(fontSize: 12, color: MazzTheme.warmStone),
                             ),
                             Text(
                               _formatDuration(dur),
-                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                              style: const TextStyle(fontSize: 12, color: MazzTheme.warmStone),
                             ),
                           ],
                         ),
@@ -156,32 +188,44 @@ class _NowPlayingViewState extends State<NowPlayingView> {
                     ],
                   ),
 
-                  // Commandes de lecture
+                  // Commandes de lecture DA MAZZ
                   Expanded(
                     flex: 2,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
-                          iconSize: 42,
-                          icon: const Icon(Icons.skip_previous, color: AppTheme.textPrimary),
+                          iconSize: 38,
+                          icon: const Icon(Icons.skip_previous_rounded, color: MazzTheme.apexWhite),
                           onPressed: widget.playerState.previous,
                         ),
                         const SizedBox(width: 24),
-                        IconButton(
-                          iconSize: 72,
-                          icon: Icon(
-                            widget.playerState.isPlaying
-                                ? Icons.pause_circle_filled
-                                : Icons.play_circle_filled,
-                            color: AppTheme.primaryColor,
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: MazzTheme.champagneGlow,
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
-                          onPressed: widget.playerState.playPause,
+                          child: IconButton(
+                            iconSize: 68,
+                            icon: Icon(
+                              widget.playerState.isPlaying
+                                  ? Icons.pause_circle_filled_rounded
+                                  : Icons.play_circle_filled_rounded,
+                              color: MazzTheme.champagne,
+                            ),
+                            onPressed: widget.playerState.playPause,
+                          ),
                         ),
                         const SizedBox(width: 24),
                         IconButton(
-                          iconSize: 42,
-                          icon: const Icon(Icons.skip_next, color: AppTheme.textPrimary),
+                          iconSize: 38,
+                          icon: const Icon(Icons.skip_next_rounded, color: MazzTheme.apexWhite),
                           onPressed: widget.playerState.next,
                         ),
                       ],
@@ -202,21 +246,42 @@ class _NowPlayingViewState extends State<NowPlayingView> {
         aspectRatio: 1.0,
         child: Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: MazzTheme.obsidianSurface,
             borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: MazzTheme.obsidianBorder, width: 1.0),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                color: Colors.black.withOpacity(0.6),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
+              ),
+              const BoxShadow(
+                color: MazzTheme.sageGlow,
+                blurRadius: 25,
+                spreadRadius: 1,
               ),
             ],
           ),
-          child: const Center(
-            child: Icon(
-              Icons.album,
-              size: 140,
-              color: AppTheme.cardColor,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Fond avec logo Bioforge Leaf
+                Image.asset(
+                  'assets/logo.png',
+                  fit: BoxFit.contain,
+                  width: 220,
+                  height: 220,
+                  errorBuilder: (ctx, err, stack) {
+                    return const Icon(
+                      Icons.spa_rounded, // Sceau végétal
+                      size: 110,
+                      color: MazzTheme.champagne,
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ),
@@ -230,7 +295,7 @@ class _NowPlayingViewState extends State<NowPlayingView> {
       return const Center(
         child: Text(
           'Aucune parole synchronisée disponible',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+          style: TextStyle(color: MazzTheme.warmStone, fontSize: 15),
         ),
       );
     }
@@ -248,14 +313,15 @@ class _NowPlayingViewState extends State<NowPlayingView> {
             widget.playerState.seek(line.timestamp);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Text(
               line.text,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: isActive ? 20 : 16,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                color: isActive ? AppTheme.accentColor : AppTheme.textSecondary.withOpacity(0.6),
+                fontSize: isActive ? 21 : 16,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                color: isActive ? MazzTheme.champagne : MazzTheme.warmStone.withOpacity(0.4),
+                letterSpacing: isActive ? 0.3 : 0.0,
               ),
             ),
           ),

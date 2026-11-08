@@ -1,0 +1,31 @@
+{
+  "name": "MazzMuziK - Streaming Haute-Fidélité",
+  "short_name": "MazzMuziK",
+  "description": "Client de streaming musical audiophile sans publicité, égaliseur studio 10 bandes et paroles karaoké en temps réel.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090D0A",
+  "theme_color": "#090D0A",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["music", "entertainment", "audio"]
+}
