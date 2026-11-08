@@ -18,6 +18,8 @@ export class AudioEngine {
   private crossfadeTime = 2; // seconds (0-12s)
   private currentVolume = 0.8;
   private crossfadeTimer: number | null = null;
+  private fadingOutDeck: 'A' | 'B' | null = null;
+  private playToken = 0;
 
   // Web Audio Context & Processing Graph
   private audioCtx: AudioContext | null = null;
@@ -35,6 +37,8 @@ export class AudioEngine {
   private onTimeUpdateCallback?: (currentTime: number, duration: number) => void;
   private onTrackEndedCallback?: () => void;
   private onPlayStateChangeCallback?: (isPlaying: boolean) => void;
+  private onBufferingCallback?: (buffering: boolean) => void;
+  private onErrorCallback?: () => void;
 
   private constructor() {
     this.audioA = new Audio();
@@ -55,7 +59,7 @@ export class AudioEngine {
     this.audioA.preload = 'auto';
     this.audioB.preload = 'auto';
     this.audioA.volume = this.currentVolume;
-    this.audioB.volume = 0;
+    this.audioB.volume = this.currentVolume;
 
     this.setupAudioListeners(this.audioA, 'A');
     this.setupAudioListeners(this.audioB, 'B');
@@ -134,6 +138,9 @@ export class AudioEngine {
       this.gainDeckA.connect(this.filters[0]);
       this.gainDeckB.connect(this.filters[0]);
 
+      // Levels now live on the gain nodes: keep element volume at unity (no squared attenuation).
+      this.audioA.volume = 1;
+      this.audioB.volume = 1;
       this.isWebAudioReady = true;
     } catch (err) {
       console.warn('Web Audio initialization note (direct fallback active):', err);
@@ -165,104 +172,150 @@ export class AudioEngine {
       }
     });
 
+    audio.addEventListener('waiting', () => {
+      if (this.activeDeck === deck) this.onBufferingCallback?.(true);
+    });
+    audio.addEventListener('playing', () => {
+      if (this.activeDeck === deck) this.onBufferingCallback?.(false);
+    });
     audio.addEventListener('error', (e) => {
       console.error(`[AudioEngine Deck ${deck}] Media Error:`, audio.error, e);
+      if (this.activeDeck === deck && audio.src) this.onErrorCallback?.();
     });
   }
 
-  public async playTrack(url: string, crossfade = true): Promise<void> {
-    this.initWebAudio();
-    if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      await this.audioCtx.resume();
-    }
+  private deckAudio(deck: 'A' | 'B'): HTMLAudioElement {
+    return deck === 'A' ? this.audioA : this.audioB;
+  }
 
-    if (this.crossfadeTimer !== null) {
-      clearInterval(this.crossfadeTimer);
-      this.crossfadeTimer = null;
-    }
+  private deckGain(deck: 'A' | 'B'): GainNode | null {
+    return deck === 'A' ? this.gainDeckA : this.gainDeckB;
+  }
 
-    const nextDeck = this.activeDeck === 'A' ? 'B' : 'A';
-    const currentAudio = this.activeDeck === 'A' ? this.audioA : this.audioB;
-    const nextAudio = nextDeck === 'A' ? this.audioA : this.audioB;
-
-    const useCrossfade =
-      crossfade &&
-      this.crossfadeTime > 0 &&
-      !currentAudio.paused &&
-      Boolean(currentAudio.src);
-
-    if (useCrossfade) {
-      nextAudio.src = url;
-      nextAudio.volume = 0;
-      await nextAudio.play();
-
-      const startTime = Date.now();
-      const durationMs = this.crossfadeTime * 1000;
-      const targetVol = this.currentVolume;
-
-      const currentGain = this.activeDeck === 'A' ? this.gainDeckA : this.gainDeckB;
-      const nextGain = nextDeck === 'A' ? this.gainDeckA : this.gainDeckB;
-
-      this.crossfadeTimer = window.setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(1, elapsed / durationMs);
-
-        currentAudio.volume = Math.max(0, targetVol * (1 - progress));
-        nextAudio.volume = Math.min(targetVol, targetVol * progress);
-
-        if (this.audioCtx) {
-          if (currentGain) currentGain.gain.setValueAtTime(Math.max(0, 1 - progress), this.audioCtx.currentTime);
-          if (nextGain) nextGain.gain.setValueAtTime(Math.min(1, progress), this.audioCtx.currentTime);
-        }
-
-        if (progress >= 1) {
-          if (this.crossfadeTimer !== null) {
-            clearInterval(this.crossfadeTimer);
-            this.crossfadeTimer = null;
-          }
-          currentAudio.pause();
-          currentAudio.currentTime = 0;
-          currentAudio.volume = targetVol;
-          nextAudio.volume = targetVol;
-          if (this.audioCtx) {
-            if (currentGain) currentGain.gain.setValueAtTime(0, this.audioCtx.currentTime);
-            if (nextGain) nextGain.gain.setValueAtTime(1, this.audioCtx.currentTime);
-          }
-        }
-      }, 50);
-
-      this.activeDeck = nextDeck;
+  /** Set a deck level (0..1). Web Audio: sample-accurate gain ramp. Otherwise: element volume. */
+  private setDeckLevel(deck: 'A' | 'B', level: number, rampSeconds = 0): void {
+    const clamped = Math.max(0, Math.min(1, level));
+    const gain = this.deckGain(deck);
+    if (this.isWebAudioReady && this.audioCtx && gain) {
+      const now = this.audioCtx.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      if (rampSeconds > 0) gain.gain.linearRampToValueAtTime(clamped, now + rampSeconds);
+      else gain.gain.setValueAtTime(clamped, now);
+      this.deckAudio(deck).volume = 1;
     } else {
-      // Immediate switch
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-
-      this.activeDeck = 'A';
-      if (this.audioCtx) {
-        if (this.gainDeckA) this.gainDeckA.gain.setValueAtTime(1, this.audioCtx.currentTime);
-        if (this.gainDeckB) this.gainDeckB.gain.setValueAtTime(0, this.audioCtx.currentTime);
-      }
-      this.audioA.src = url;
-      this.audioA.volume = this.currentVolume;
-      await this.audioA.play();
+      this.deckAudio(deck).volume = clamped * this.currentVolume;
     }
   }
 
+  /** Settle any running crossfade instantly: outgoing deck stopped and silent, incoming at full level. */
+  private settleCrossfade(): void {
+    if (this.crossfadeTimer !== null) {
+      clearTimeout(this.crossfadeTimer);
+      this.crossfadeTimer = null;
+    }
+    if (this.fadingOutDeck) {
+      const out = this.deckAudio(this.fadingOutDeck);
+      out.pause();
+      this.setDeckLevel(this.fadingOutDeck, 0);
+      this.fadingOutDeck = null;
+    }
+    this.setDeckLevel(this.activeDeck, 1);
+  }
+
+  public async playTrack(url: string, crossfade = true): Promise<void> {
+    const token = ++this.playToken;
+    this.initWebAudio();
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      await this.audioCtx.resume().catch(() => undefined);
+      if (token !== this.playToken) return;
+    }
+
+    this.settleCrossfade();
+
+    const prevDeck = this.activeDeck;
+    const prevAudio = this.deckAudio(prevDeck);
+    const nextDeck: 'A' | 'B' = prevDeck === 'A' ? 'B' : 'A';
+    const nextAudio = this.deckAudio(nextDeck);
+
+    // iOS ignores HTMLMediaElement.volume (read-only) so a real crossfade is impossible there.
+    const useCrossfade =
+      crossfade &&
+      !isIOS &&
+      this.crossfadeTime > 0 &&
+      !prevAudio.paused &&
+      Boolean(prevAudio.src);
+
+    // Always load on the idle deck: the playing deck is never touched until the new one is audible.
+    nextAudio.pause();
+    nextAudio.src = url;
+    nextAudio.currentTime = 0;
+    this.setDeckLevel(nextDeck, useCrossfade ? 0 : 1);
+    this.onBufferingCallback?.(true);
+
+    try {
+      await nextAudio.play();
+    } catch (err) {
+      // A newer request took over the deck: not an error for the caller.
+      if (token !== this.playToken) return;
+      throw err;
+    }
+    if (token !== this.playToken) return;
+
+    this.activeDeck = nextDeck;
+
+    if (useCrossfade) {
+      const seconds = this.crossfadeTime;
+      this.fadingOutDeck = prevDeck;
+      this.setDeckLevel(prevDeck, 0, seconds);
+      this.setDeckLevel(nextDeck, 1, seconds);
+      if (!this.isWebAudioReady) this.runElementFade(prevDeck, nextDeck, seconds * 1000);
+      this.crossfadeTimer = window.setTimeout(() => this.settleCrossfade(), seconds * 1000 + 60);
+    } else {
+      prevAudio.pause();
+      prevAudio.currentTime = 0;
+      this.setDeckLevel(prevDeck, 0);
+      this.setDeckLevel(nextDeck, 1);
+    }
+  }
+
+  /** Fallback fade for browsers without Web Audio graph (element volume steps). */
+  private runElementFade(outDeck: 'A' | 'B', inDeck: 'A' | 'B', durationMs: number): void {
+    const start = performance.now();
+    const step = () => {
+      if (this.fadingOutDeck !== outDeck || this.activeDeck !== inDeck) return;
+      const p = Math.min(1, (performance.now() - start) / durationMs);
+      this.deckAudio(outDeck).volume = (1 - p) * this.currentVolume;
+      this.deckAudio(inDeck).volume = p * this.currentVolume;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  /** Cancel in-flight loads and silence everything (used when the player is reset). */
+  public stop(): void {
+    this.playToken++;
+    this.settleCrossfade();
+    this.audioA.pause();
+    this.audioB.pause();
+  }
+
   public pause(): void {
-    const activeAudio = this.activeDeck === 'A' ? this.audioA : this.audioB;
-    activeAudio.pause();
+    this.settleCrossfade();
+    this.deckAudio(this.activeDeck).pause();
   }
 
   public resume(): void {
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
+      void this.audioCtx.resume();
     }
-    const activeAudio = this.activeDeck === 'A' ? this.audioA : this.audioB;
-    activeAudio.play().catch((err) => console.warn('Resume error:', err));
+    this.deckAudio(this.activeDeck)
+      .play()
+      .catch((err) => console.warn('Resume error:', err));
   }
 
   public seek(seconds: number): void {
-    const activeAudio = this.activeDeck === 'A' ? this.audioA : this.audioB;
+    const activeAudio = this.deckAudio(this.activeDeck);
     if (Number.isFinite(seconds) && activeAudio.duration) {
       activeAudio.currentTime = Math.max(0, Math.min(seconds, activeAudio.duration));
     }
@@ -270,10 +323,10 @@ export class AudioEngine {
 
   public setVolume(vol: number): void {
     this.currentVolume = Math.max(0, Math.min(1, vol));
-    this.audioA.volume = this.currentVolume;
-    this.audioB.volume = this.currentVolume;
     if (this.masterGain && this.audioCtx) {
       this.masterGain.gain.setValueAtTime(this.currentVolume, this.audioCtx.currentTime);
+    } else if (!isIOS) {
+      this.deckAudio(this.activeDeck).volume = this.currentVolume;
     }
   }
 
@@ -324,7 +377,11 @@ export class AudioEngine {
     onTimeUpdate?: (curr: number, dur: number) => void;
     onEnded?: () => void;
     onPlayStateChange?: (playing: boolean) => void;
+    onBuffering?: (buffering: boolean) => void;
+    onError?: () => void;
   }): void {
+    this.onBufferingCallback = callbacks.onBuffering;
+    this.onErrorCallback = callbacks.onError;
     this.onTimeUpdateCallback = callbacks.onTimeUpdate;
     this.onTrackEndedCallback = callbacks.onEnded;
     this.onPlayStateChangeCallback = callbacks.onPlayStateChange;

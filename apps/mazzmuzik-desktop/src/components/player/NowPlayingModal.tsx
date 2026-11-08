@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   Play,
@@ -48,7 +48,71 @@ export const NowPlayingModal: React.FC = () => {
 
   const { favorites, toggleFavorite } = useLibraryStore();
 
-  if (!isNowPlayingOpen || !currentTrack) return null;
+  // Sheet animation: mounted -> shown (slide in), dragY (live swipe), closing (slide out)
+  const [mounted, setMounted] = useState(false);
+  const [shown, setShown] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ startY: number; lastY: number; lastT: number; v: number } | null>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isNowPlayingOpen) {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+      setMounted(true);
+      const raf = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)));
+      return () => cancelAnimationFrame(raf);
+    }
+    setShown(false);
+    const t = window.setTimeout(() => setMounted(false), 320);
+    return () => window.clearTimeout(t);
+  }, [isNowPlayingOpen]);
+
+  const dismiss = useCallback(() => {
+    setDragging(false);
+    setDragY(0);
+    setShown(false);
+    closeTimer.current = window.setTimeout(closeNowPlaying, 300);
+  }, [closeNowPlaying]);
+
+  useEffect(() => {
+    if (!isNowPlayingOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isNowPlayingOpen, dismiss]);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('input,button')) return;
+    drag.current = { startY: e.clientY, lastY: e.clientY, lastT: e.timeStamp, v: 0 };
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    const dt = Math.max(1, e.timeStamp - d.lastT);
+    d.v = (e.clientY - d.lastY) / dt;
+    d.lastY = e.clientY;
+    d.lastT = e.timeStamp;
+    setDragY(Math.max(0, e.clientY - d.startY)); // downward only
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    const dy = Math.max(0, e.clientY - d.startY);
+    if (dy > 120 || (d.v > 0.6 && dy > 30)) dismiss();
+    else {
+      setDragging(false);
+      setDragY(0);
+    }
+  };
+
+  if (!mounted || !currentTrack) return null;
 
   const isFav = favorites.some((f) => f.id === currentTrack.id);
 
@@ -58,11 +122,27 @@ export const NowPlayingModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-b from-[#111813] via-obsidian to-obsidian flex flex-col justify-between p-6 pt-[max(env(safe-area-inset-top),20px)] pb-[max(env(safe-area-inset-bottom),24px)] text-apex-white select-none animate-in slide-in-from-bottom duration-300 backdrop-blur-2xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Lecture en cours"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      style={{
+        transform: `translate3d(0, ${shown ? dragY : window.innerHeight}px, 0)`,
+        transition: dragging ? 'none' : 'transform 300ms cubic-bezier(0.32, 0.72, 0, 1)',
+        willChange: 'transform',
+        touchAction: 'pan-x',
+        opacity: shown ? Math.max(0.4, 1 - dragY / 600) : 1,
+      }}
+      className="fixed inset-0 z-50 bg-gradient-to-b from-[#111813] via-obsidian to-obsidian flex flex-col justify-between p-6 pt-[max(env(safe-area-inset-top),20px)] pb-[max(env(safe-area-inset-bottom),24px)] text-apex-white select-none backdrop-blur-2xl motion-reduce:!transition-none">
+      <div className="mx-auto -mt-2 h-1 w-10 rounded-full bg-warm-stone/30" aria-hidden="true" />
       {/* 1. Header with Collapse & Source */}
       <div className="flex items-center justify-between w-full">
         <button
-          onClick={closeNowPlaying}
+          onClick={dismiss}
           className="p-2 -ml-2 text-warm-stone/70 hover:text-apex-white active:scale-95 transition-transform"
           title="Réduire"
         >

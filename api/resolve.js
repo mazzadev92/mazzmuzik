@@ -1,70 +1,118 @@
 // Vercel Serverless Function: /api/resolve
+// Resolves a FULL-LENGTH audio stream URL. Never returns 30 s previews.
+// Cache chain: Upstash Redis REST (optional) -> in-memory TTL 4 h -> origin providers.
+const TTL_SECONDS = 4 * 3600;
+const CACHE_CONTROL = 'public, s-maxage=14400, stale-while-revalidate=3600';
+const memory = new Map(); // warm-instance cache: key -> { value, expires }
+const inflight = new Map(); // dedupe concurrent identical lookups
+
+const normalize = (q) => q.toLowerCase().replace(/\s+/g, ' ').trim();
+
+async function redis(cmd) {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cmd),
+      signal: AbortSignal.timeout(1500),
+    });
+    return r.ok ? (await r.json()).result : null;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheGet(key) {
+  const hit = memory.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value;
+  const raw = await redis(['GET', key]);
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    memory.set(key, { value, expires: Date.now() + TTL_SECONDS * 1000 });
+    return value;
+  } catch {
+    return null; // corrupt entry: treat as a miss
+  }
+}
+
+async function cacheSet(key, value) {
+  memory.set(key, { value, expires: Date.now() + TTL_SECONDS * 1000 });
+  if (memory.size > 500) memory.delete(memory.keys().next().value);
+  await redis(['SET', key, JSON.stringify(value), 'EX', TTL_SECONDS]);
+}
+
+async function resolveStream(searchQuery) {
+  // 1. Bound backend service (mazzmuzik-server via MAZZMUZIK_SERVER_URL binding)
+  const serverUrl = process.env.MAZZMUZIK_SERVER_URL || process.env.STREAM_RESOLVER_URL;
+  if (serverUrl) {
+    try {
+      const target = new URL('/api/stream/url', serverUrl);
+      target.searchParams.set('q', searchQuery);
+      const r = await fetch(target, { signal: AbortSignal.timeout(6000) });
+      if (r.ok) {
+        const data = await r.json();
+        const streamUrl = data.stream_url || data.streamUrl;
+        if (streamUrl) return { streamUrl, source: 'mazzmuzik-server' };
+      }
+    } catch (err) {
+      console.warn('MazzMuziK Server resolution error:', err);
+    }
+  }
+
+  // 2. Audius: full-length 320 kbps stream, artist-published and free to stream
+  try {
+    const url = `https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(searchQuery)}&limit=3&app_name=MazzMuziK`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const first = (await r.json())?.data?.[0];
+      if (first?.id) {
+        return {
+          streamUrl: `https://discoveryprovider.audius.co/v1/tracks/${first.id}/stream?app_name=MazzMuziK`,
+          title: first.title,
+          source: 'audius',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Audius resolution error:', err);
+  }
+
+  return null; // no 30 s preview fallback: caller decides what to do
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const { artist, title, q } = req.query || {};
+  const searchQuery = String(q || `${artist || ''} ${title || ''}`).trim();
+  if (!searchQuery) return res.status(400).json({ error: 'Paramètre q manquant' });
+
+  const key = `resolve:${normalize(searchQuery)}`;
+  const cached = await cacheGet(key);
+  if (cached) {
+    res.setHeader('Cache-Control', CACHE_CONTROL);
+    res.setHeader('X-Mazz-Cache', 'HIT');
+    return res.status(200).json(cached);
   }
 
-  const { videoId, artist, title, q } = req.query || {};
-  const searchQuery = (q || `${artist || ''} ${title || ''}`).trim();
-
-  // 1. Bound internal backend service (mazzmuzik-server via MAZZMUZIK_SERVER_URL binding)
-  const serverUrl = process.env.MAZZMUZIK_SERVER_URL || process.env.STREAM_RESOLVER_URL;
-  if (serverUrl && searchQuery) {
-    try {
-      const targetUrl = new URL('/api/stream/url', serverUrl);
-      targetUrl.searchParams.set('q', searchQuery);
-      const extRes = await fetch(targetUrl, { signal: AbortSignal.timeout(6000) });
-      if (extRes.ok) {
-        const data = await extRes.json();
-        if (data.stream_url || data.streamUrl) {
-          return res.status(200).json({
-            streamUrl: data.stream_url || data.streamUrl,
-            source: 'mazzmuzik-server',
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('MazzMuziK Server resolution error via binding:', err);
-    }
+  let pending = inflight.get(key);
+  if (!pending) {
+    pending = resolveStream(searchQuery).finally(() => inflight.delete(key));
+    inflight.set(key, pending);
   }
+  const result = await pending;
+  if (!result) return res.status(404).json({ error: 'Flux audio introuvable' });
 
-  // 2. High Quality Audius 320kbps full studio stream match
-  if (searchQuery) {
-    try {
-      const audiusUrl = `https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(searchQuery)}&limit=3&app_name=MazzMuziK`;
-      const aRes = await fetch(audiusUrl, { signal: AbortSignal.timeout(5000) });
-      if (aRes.ok) {
-        const json = await aRes.json();
-        const first = json?.data?.[0];
-        if (first?.id) {
-          const streamUrl = `https://discoveryprovider.audius.co/v1/tracks/${first.id}/stream?app_name=MazzMuziK`;
-          return res.status(200).json({ streamUrl, title: first.title, source: 'audius' });
-        }
-      }
-    } catch (err) {
-      console.warn('Audius resolution error:', err);
-    }
-  }
-
-  // 3. Fallback: Deezer direct preview stream
-  if (searchQuery) {
-    try {
-      const deezerRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(searchQuery)}&limit=1`, { signal: AbortSignal.timeout(4000) });
-      if (deezerRes.ok) {
-        const dJson = await deezerRes.json();
-        const dTrack = dJson?.data?.[0];
-        if (dTrack?.preview) {
-          return res.status(200).json({ streamUrl: dTrack.preview, isPreview: true, source: 'deezer' });
-        }
-      }
-    } catch (err) {
-      console.warn('Deezer fallback error:', err);
-    }
-  }
-
-  return res.status(404).json({ error: 'Flux audio introuvable' });
+  await cacheSet(key, result);
+  res.setHeader('Cache-Control', CACHE_CONTROL);
+  res.setHeader('X-Mazz-Cache', 'MISS');
+  return res.status(200).json(result);
 }

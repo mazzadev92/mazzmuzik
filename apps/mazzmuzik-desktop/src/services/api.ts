@@ -355,6 +355,10 @@ export async function searchTracks(
 const LOCAL_PROXY_PORT = 28234;
 const streamCache = new Map<string, { url: string; time: number }>();
 
+export function invalidateStream(id: string): void {
+  streamCache.delete(id);
+}
+
 export function toProxiedStreamUrl(rawUrl: string): string {
   if (!rawUrl) return '';
   // In a web browser / PWA on mobile or non-desktop, direct HTTPS media streams work natively
@@ -372,7 +376,21 @@ export function toProxiedStreamUrl(rawUrl: string): string {
  * Resolves direct audio stream for a track via Tauri sidecar yt-dlp or direct previews
  * Caches in memory for instant 0 ms recall.
  */
-export async function resolveTrackStream(track: Track): Promise<string> {
+const inflightResolves = new Map<string, Promise<string>>();
+
+export function resolveTrackStream(track: Track): Promise<string> {
+  const cached = streamCache.get(track.id);
+  if (cached && Date.now() - cached.time < 4 * 3600 * 1000) return Promise.resolve(cached.url);
+  // A click during a background prefetch joins the same request instead of starting a second one
+  let pending = inflightResolves.get(track.id);
+  if (!pending) {
+    pending = doResolveTrackStream(track).finally(() => inflightResolves.delete(track.id));
+    inflightResolves.set(track.id, pending);
+  }
+  return pending;
+}
+
+async function doResolveTrackStream(track: Track): Promise<string> {
   // 1. Instant Cache Hit (0 ms)
   const cached = streamCache.get(track.id);
   if (cached && Date.now() - cached.time < 4 * 3600 * 1000) {
@@ -452,33 +470,34 @@ export async function resolveTrackStream(track: Track): Promise<string> {
  */
 class PrefetchManager {
   private queue: Track[] = [];
-  private isProcessing = false;
+  private active = 0;
+  private static readonly CONCURRENCY = 3;
 
   public enqueue(tracks: Track[], priority = false) {
     for (const t of tracks) {
-      if (!t || t.streamUrl || streamCache.has(t.id)) continue;
-      if (priority) {
-        this.queue.unshift(t);
-      } else if (!this.queue.some((q) => q.id === t.id)) {
-        this.queue.push(t);
+      if (!t || t.streamUrl || streamCache.has(t.id) || inflightResolves.has(t.id)) continue;
+      const known = this.queue.findIndex((q) => q.id === t.id);
+      if (known >= 0) {
+        if (!priority) continue;
+        this.queue.splice(known, 1);
       }
+      if (priority) this.queue.unshift(t);
+      else this.queue.push(t);
     }
-    this.processNext();
+    this.pump();
   }
 
-  private async processNext() {
-    if (this.isProcessing || this.queue.length === 0) return;
-    this.isProcessing = true;
-    const nextTrack = this.queue.shift();
-    if (nextTrack) {
-      try {
-        await resolveTrackStream(nextTrack);
-      } catch {
-        // Silently continue to next item in prefetch queue
-      }
+  private pump() {
+    while (this.active < PrefetchManager.CONCURRENCY && this.queue.length > 0) {
+      const next = this.queue.shift()!;
+      this.active++;
+      resolveTrackStream(next)
+        .catch(() => undefined) // a failed prefetch is retried for real on click
+        .finally(() => {
+          this.active--;
+          this.pump();
+        });
     }
-    this.isProcessing = false;
-    setTimeout(() => this.processNext(), 250);
   }
 }
 

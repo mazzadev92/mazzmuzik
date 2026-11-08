@@ -2,12 +2,16 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Track, RepeatMode } from '../types/music';
 import { audioEngine } from '../services/audioEngine';
+import { RequestGate, transition, type PlaybackEvent, type PlaybackState } from '../services/playbackMachine';
+
+const gate = new RequestGate();
 
 interface PlayerState {
   currentTrack: Track | null;
   queue: Track[];
   queueIndex: number;
   isPlaying: boolean;
+  playbackState: PlaybackState;
   currentTime: number;
   duration: number;
   volume: number;
@@ -100,6 +104,12 @@ function setupMediaSessionActions(
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => {
+      const fire = (event: PlaybackEvent) => {
+        const cur = get().playbackState;
+        const next = transition(cur, event);
+        if (next !== cur) set({ playbackState: next });
+      };
+
       // Connect audioEngine events
       audioEngine.setListeners({
         onTimeUpdate: (curr, dur) => {
@@ -122,7 +132,15 @@ export const usePlayerStore = create<PlayerState>()(
             }
           }
         },
+        onBuffering: (buffering) => fire(buffering ? 'WAITING' : 'CANPLAY'),
+        onError: () => {
+          const t = get().currentTrack;
+          if (t) void import('../services/api').then(({ invalidateStream }) => invalidateStream(t.id));
+          fire('FAIL');
+          set({ isPlaying: false, isLoadingTrack: false });
+        },
         onPlayStateChange: (playing) => {
+          fire(playing ? 'RESUME' : 'PAUSE');
           set({ isPlaying: playing });
           if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
             navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
@@ -152,6 +170,7 @@ export const usePlayerStore = create<PlayerState>()(
         queue: [],
         queueIndex: -1,
         isPlaying: false,
+        playbackState: 'idle' as PlaybackState,
         currentTime: 0,
         duration: 0,
         volume: 0.8,
@@ -168,20 +187,25 @@ export const usePlayerStore = create<PlayerState>()(
         isLyricsSynced: false,
 
         playTrack: async (track: Track) => {
-          const alreadyResolved = Boolean(track.streamUrl);
+          const token = gate.next();
+                    // Show the new track instantly (0 ms perceived), whatever the previous state was.
+          fire('REQUEST');
           set({
             currentTrack: track,
             isPlaying: true,
-            isLoadingTrack: !alreadyResolved,
+            isLoadingTrack: true,
             isLoadingLyrics: !track.lyrics,
+            currentTime: 0,
+            duration: 0,
           });
+          syncMediaSessionMetadata(track);
 
           // Fetch lyrics in background immediately
           if (!track.lyrics) {
             import('../services/api').then(async ({ fetchLyrics }) => {
               const lyr = await fetchLyrics(track.title, track.artist, track.duration);
               const { currentTrack } = get();
-              if (currentTrack && currentTrack.id === track.id) {
+              if (!gate.isStale(token) && currentTrack && currentTrack.id === track.id) {
                 set({
                   currentTrack: { ...currentTrack, lyrics: lyr?.lrc || '' },
                   isLyricsSynced: lyr?.isSynced ?? false,
@@ -189,62 +213,41 @@ export const usePlayerStore = create<PlayerState>()(
                 });
               }
             }).catch(() => {
-              set({ isLoadingLyrics: false });
+              if (!gate.isStale(token)) set({ isLoadingLyrics: false });
             });
           }
 
           try {
-            syncMediaSessionMetadata(track);
             let streamUrl = track.streamUrl;
             if (!streamUrl) {
               const { resolveTrackStream } = await import('../services/api');
               streamUrl = await resolveTrackStream(track);
             }
+            if (gate.isStale(token)) return; // superseded by a newer click
 
-            if (streamUrl) {
-              const updatedTrack = { ...track, streamUrl };
-              set({ currentTrack: updatedTrack, isLoadingTrack: false });
-              syncMediaSessionMetadata(updatedTrack);
-              await audioEngine.playTrack(streamUrl);
-              set({ isPlaying: true });
+            if (!streamUrl) throw new Error('Aucun flux audio résolu');
+            fire('RESOLVED');
+            const updatedTrack = { ...track, streamUrl };
+            set({ currentTrack: updatedTrack });
+            syncMediaSessionMetadata(updatedTrack);
 
-              // PRE-FETCH UPCOMING TRACKS IN QUEUE (0 ms latency when songs change!)
-              const { queue, queueIndex } = get();
-              const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
-              if (upcoming.length > 0) {
-                const { prefetchManager } = await import('../services/api');
-                prefetchManager.enqueue(upcoming);
-              }
-            } else {
-              throw new Error('Aucun flux audio résolu');
+            await audioEngine.playTrack(streamUrl);
+            if (gate.isStale(token)) return;
+            set({ isPlaying: true, isLoadingTrack: false });
+            fire('CANPLAY');
+
+            // Pre-resolve upcoming tracks so the next click starts at once
+            const { queue, queueIndex } = get();
+            const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
+            if (upcoming.length > 0) {
+              const { prefetchManager } = await import('../services/api');
+              prefetchManager.enqueue(upcoming);
             }
           } catch (err) {
+            if (gate.isStale(token)) return;
             console.error('Failed to resolve and play track:', err);
+            fire('FAIL');
             set({ isPlaying: false, isLoadingTrack: false });
-          }
-
-          // Update navigator MediaSession
-          if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-              title: track.title,
-              artist: track.artist,
-              album: track.album || 'MazzMuziK',
-              artwork: track.coverUrl
-                ? [
-                    { src: track.coverUrl, sizes: '96x96', type: 'image/jpeg' },
-                    { src: track.coverUrl, sizes: '256x256', type: 'image/jpeg' },
-                    { src: track.coverUrl, sizes: '512x512', type: 'image/jpeg' },
-                  ]
-                : [],
-            });
-
-            navigator.mediaSession.setActionHandler('play', () => get().togglePlay());
-            navigator.mediaSession.setActionHandler('pause', () => get().togglePlay());
-            navigator.mediaSession.setActionHandler('previoustrack', () => get().prevTrack());
-            navigator.mediaSession.setActionHandler('nexttrack', () => get().nextTrack());
-            navigator.mediaSession.setActionHandler('seekto', (details) => {
-              if (details.seekTime !== undefined) get().seek(details.seekTime);
-            });
           }
         },
 

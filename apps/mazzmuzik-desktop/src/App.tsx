@@ -38,7 +38,7 @@ export const App: React.FC = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="relative w-full h-[100dvh] flex flex-col bg-obsidian text-apex-white overflow-hidden select-none font-sans">
+      <div className="relative w-full h-[100dvh] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] flex flex-col bg-obsidian text-apex-white overflow-hidden select-none font-sans">
         {/* Background WebGL Shader Visualizer */}
         <ShaderVisualizer />
 
