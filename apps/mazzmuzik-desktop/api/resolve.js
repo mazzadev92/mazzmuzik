@@ -11,20 +11,24 @@ export default async function handler(req, res) {
   const { videoId, artist, title, q } = req.query || {};
   const searchQuery = (q || `${artist || ''} ${title || ''}`).trim();
 
-  // 1. External dedicated resolver (if configured in Vercel environment variables)
-  const externalResolver = process.env.STREAM_RESOLVER_URL;
-  if (externalResolver) {
+  // 1. Bound internal backend service (mazzmuzik-server via MAZZMUZIK_SERVER_URL binding)
+  const serverUrl = process.env.MAZZMUZIK_SERVER_URL || process.env.STREAM_RESOLVER_URL;
+  if (serverUrl && searchQuery) {
     try {
-      const targetUrl = `${externalResolver}/api/resolve?${new URLSearchParams(req.query).toString()}`;
+      const targetUrl = new URL('/api/stream/url', serverUrl);
+      targetUrl.searchParams.set('q', searchQuery);
       const extRes = await fetch(targetUrl, { signal: AbortSignal.timeout(6000) });
       if (extRes.ok) {
         const data = await extRes.json();
-        if (data.streamUrl) {
-          return res.status(200).json({ streamUrl: data.streamUrl, source: 'external' });
+        if (data.stream_url || data.streamUrl) {
+          return res.status(200).json({
+            streamUrl: data.stream_url || data.streamUrl,
+            source: 'mazzmuzik-server',
+          });
         }
       }
     } catch (err) {
-      console.warn('External resolver error:', err);
+      console.warn('MazzMuziK Server resolution error via binding:', err);
     }
   }
 

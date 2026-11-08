@@ -48,7 +48,10 @@ export const useSettingsStore = create<SettingsState>()(
       eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       currentEqPreset: 'flat',
       downloadPath: 'D:\\Mazz MuZik\\downloads',
-      apiUrl: 'http://127.0.0.1:4040',
+      apiUrl:
+        typeof window !== 'undefined' && !Boolean((window as any).__TAURI_INTERNALS__)
+          ? '/api/server'
+          : 'http://127.0.0.1:4040',
       apiKey: '',
       deezerArl: '63a2db46262a87f2b2efe5f77beac39f9c439f816b57ddbc8e3a27593b05d676ba1c11f65ac50ae25e49e45e7af1315b029d51215314239844e8ddcb565c45d1d6a7bc4ba2891023c111c92b1f2350f44dfecb58159608273aa8ef5ceaf0f419',
       preferFlac: false,

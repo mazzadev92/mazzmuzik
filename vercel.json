@@ -1,7 +1,23 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm --prefix apps/mazzmuzik-desktop install && npm --prefix apps/mazzmuzik-desktop run build",
-  "outputDirectory": "apps/mazzmuzik-desktop/dist",
+  "services": {
+    "mazzmuzik-desktop": {
+      "root": "apps/mazzmuzik-desktop",
+      "framework": "vite",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "mazzmuzik-server",
+          "format": "url",
+          "env": "MAZZMUZIK_SERVER_URL"
+        }
+      ]
+    },
+    "mazzmuzik-server": {
+      "root": ".",
+      "runtime": "container"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/deezer/:match*",
@@ -16,8 +32,22 @@
       "destination": "https://lrclib.net/:match*"
     },
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "source": "/rest/(.*)",
+      "destination": {
+        "service": "mazzmuzik-server"
+      }
+    },
+    {
+      "source": "/api/server/(.*)",
+      "destination": {
+        "service": "mazzmuzik-server"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "mazzmuzik-desktop"
+      }
     }
   ]
 }
