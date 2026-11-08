@@ -1,7 +1,6 @@
 # Rust
 target/
 **/*.rs.bk
-Cargo.lock
 
 # SQLite & Data
 *.db
@@ -49,3 +48,6 @@ binaries/
 Thumbs.db
 .idea/
 .vscode/
+
+.vercel
+.env*
