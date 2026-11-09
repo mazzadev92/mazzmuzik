@@ -27,6 +27,7 @@ const SOURCE_NAMES: Record<SourceType, string> = {
   archive: 'Archive.org Audio Library',
   mixcloud: 'Mixcloud (mcsearch sidecar)',
   local: 'Fichiers Locaux',
+  spotify: 'Spotify (Ingestion directe de titres, albums & playlists sans compte)',
 };
 
 const SHADER_PRESETS: { id: ShaderPreset; label: string; desc: string }[] = [

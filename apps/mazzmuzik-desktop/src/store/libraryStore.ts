@@ -12,6 +12,7 @@ interface LibraryState {
   isFavorite: (trackId: string) => boolean;
   addRecentTrack: (track: Track) => void;
   createPlaylist: (name: string, description?: string) => string;
+  createPlaylistWithTracks: (name: string, tracks: Track[], description?: string, coverUrl?: string) => string;
   deletePlaylist: (playlistId: string) => void;
   addTrackToPlaylist: (playlistId: string, track: Track) => void;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
@@ -74,6 +75,22 @@ export const useLibraryStore = create<LibraryState>()(
           updatedAt: Date.now(),
         };
         set((state) => ({ playlists: [...state.playlists, newPl] }));
+        return id;
+      },
+
+      createPlaylistWithTracks: (name: string, tracks: Track[], description?: string, coverUrl?: string) => {
+        const id = 'pl-' + Date.now().toString(36);
+        const newPl: Playlist = {
+          id,
+          name,
+          description,
+          coverUrl: coverUrl || tracks[0]?.coverUrl,
+          trackIds: tracks.map((t) => t.id),
+          tracks,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        set((state) => ({ playlists: [newPl, ...state.playlists] }));
         return id;
       },
 

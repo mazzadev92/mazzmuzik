@@ -91,11 +91,11 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { artist, title, q } = req.query || {};
+  const { artist, title, q, previewUrl } = req.query || {};
   const searchQuery = String(q || `${artist || ''} ${title || ''}`).trim();
-  if (!searchQuery) return res.status(400).json({ error: 'Paramètre q manquant' });
+  if (!searchQuery && !previewUrl) return res.status(400).json({ error: 'Paramètre q ou previewUrl manquant' });
 
-  const key = `resolve:${normalize(searchQuery)}`;
+  const key = `resolve:${normalize(searchQuery || previewUrl)}`;
   const cached = await cacheGet(key);
   if (cached) {
     res.setHeader('Cache-Control', CACHE_CONTROL);
@@ -109,7 +109,12 @@ export default async function handler(req, res) {
     inflight.set(key, pending);
   }
   const result = await pending;
-  if (!result) return res.status(404).json({ error: 'Flux audio introuvable' });
+  if (!result) {
+    if (previewUrl) {
+      return res.status(200).json({ streamUrl: previewUrl, isPreview: true, source: 'preview' });
+    }
+    return res.status(404).json({ error: 'Flux audio introuvable' });
+  }
 
   await cacheSet(key, result);
   res.setHeader('Cache-Control', CACHE_CONTROL);

@@ -39,6 +39,7 @@ const SOURCE_LABELS: Record<SourceType, { label: string; color: string }> = {
   archive: { label: 'Archive', color: 'text-warm-stone border-warm-stone/40 bg-warm-stone/10' },
   mixcloud: { label: 'Mixcloud', color: 'text-sage border-sage/40 bg-sage/10' },
   local: { label: 'Local', color: 'text-warm-stone border-warm-stone/40 bg-warm-stone/10' },
+  spotify: { label: 'Spotify', color: 'text-[#1DB954] border-[#1DB954]/40 bg-[#1DB954]/10' },
 };
 
 export const BottomPlayer: React.FC = () => {

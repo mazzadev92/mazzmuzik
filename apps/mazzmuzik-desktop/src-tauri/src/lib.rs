@@ -536,8 +536,8 @@ async fn resolve_stream_url(
         }
     }
 
-    // If source is Deezer, cross-resolve to YouTube Music studio version if no native Deezer stream
-    let actual_target = if source == "deezer" {
+    // If source is Deezer or Spotify, cross-resolve to YouTube Music studio version
+    let actual_target = if source == "deezer" || source == "spotify" {
         let search_term = match (&artist, &title) {
             (Some(a), Some(t)) if !a.is_empty() && !t.is_empty() => format!("{} {}", a, t),
             _ => query_or_id.clone(),
@@ -558,7 +558,7 @@ async fn resolve_stream_url(
         .ok_or_else(|| "Binaire yt-dlp introuvable".to_string())?;
 
     let target_url = match source.as_str() {
-        "deezer" => actual_target,
+        "deezer" | "spotify" => actual_target,
         "ytmusic" => {
             if actual_target.starts_with("http") {
                 actual_target

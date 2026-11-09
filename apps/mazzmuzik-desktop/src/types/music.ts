@@ -7,7 +7,8 @@ export type SourceType =
   | 'archive'
   | 'radio'
   | 'mixcloud'
-  | 'local';
+  | 'local'
+  | 'spotify';
 
 export interface Track {
   id: string;
@@ -35,8 +36,19 @@ export interface Playlist {
   description?: string;
   coverUrl?: string;
   trackIds: string[];
+  tracks?: Track[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ParsedMusicResult {
+  platform: 'spotify' | 'deezer' | 'youtube' | 'soundcloud' | 'audius';
+  type: 'track' | 'playlist' | 'album';
+  title: string;
+  subtitle?: string;
+  coverUrl?: string;
+  trackCount: number;
+  tracks: Track[];
 }
 
 export interface RadioStation {

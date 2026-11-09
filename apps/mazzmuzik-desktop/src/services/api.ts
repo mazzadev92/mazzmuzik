@@ -1,4 +1,5 @@
 import type { Track, RadioStation, SourceType } from '../types/music';
+import { isMusicUrl, parseMusicUrl } from './linkParser';
 
 const AUDIUS_API_BASE = 'https://discoveryprovider.audius.co/v1';
 const RADIO_API_BASE = 'https://de1.api.radio-browser.info/json';
@@ -283,6 +284,18 @@ export async function searchTracks(
 ): Promise<Track[]> {
   if (!query.trim()) return [];
 
+  // Direct Music Link detection (Spotify, Deezer, YouTube, SoundCloud)
+  if (isMusicUrl(query)) {
+    try {
+      const parsed = await parseMusicUrl(query);
+      if (parsed && parsed.tracks.length > 0) {
+        return parsed.tracks;
+      }
+    } catch (err) {
+      console.warn('Direct URL parsing failed:', err);
+    }
+  }
+
   const promises: Promise<Track[]>[] = [];
 
   if (source === 'all' || source === 'deezer') {
@@ -431,7 +444,7 @@ async function doResolveTrackStream(track: Track): Promise<string> {
   }
 
   // 2. Pre-existing full streamUrl (Audius 320k, Radio direct)
-  if (track.streamUrl && track.source !== 'deezer') {
+  if (track.streamUrl && track.source !== 'deezer' && track.source !== 'spotify') {
     const proxied = toProxiedStreamUrl(track.streamUrl);
     streamCache.set(track.id, { url: proxied, time: Date.now() });
     return proxied;
@@ -462,6 +475,7 @@ async function doResolveTrackStream(track: Track): Promise<string> {
     if (videoId) params.set('videoId', videoId);
     if (track.artist) params.set('artist', track.artist);
     if (track.title) params.set('title', track.title);
+    if (track.previewUrl) params.set('previewUrl', track.previewUrl);
     params.set('q', `${track.artist} ${track.title}`.trim());
 
     const res = await fetch(`/api/resolve?${params.toString()}`);

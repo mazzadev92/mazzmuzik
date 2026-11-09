@@ -242,15 +242,36 @@ export const LibraryView: React.FC = () => {
             {playlists.map((pl) => (
               <div
                 key={pl.id}
-                className="group p-4 rounded-xl bg-surface hover:bg-surface-hi border border-border transition-all flex flex-col justify-between gap-4"
+                onClick={() => {
+                  if (pl.tracks && pl.tracks.length > 0) {
+                    handlePlayCollection(pl.tracks, 0);
+                  }
+                }}
+                className="group p-4 rounded-xl bg-surface hover:bg-surface-hi border border-border transition-all flex flex-col justify-between gap-4 cursor-pointer"
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-lg bg-obsidian border border-border flex items-center justify-center text-champagne">
-                    <ListMusic size={24} />
+                  <div className="relative w-14 h-14 rounded-lg bg-obsidian border border-border overflow-hidden flex items-center justify-center text-champagne shadow-md">
+                    {pl.coverUrl ? (
+                      <img
+                        src={pl.coverUrl}
+                        alt={pl.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <ListMusic size={24} />
+                    )}
+                    {pl.tracks && pl.tracks.length > 0 && (
+                      <div className="absolute inset-0 bg-obsidian/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Play size={18} className="fill-champagne text-champagne" />
+                      </div>
+                    )}
                   </div>
                   {pl.id !== 'pl-favorites' && (
                     <button
-                      onClick={() => deletePlaylist(pl.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deletePlaylist(pl.id);
+                      }}
                       className="opacity-0 group-hover:opacity-100 text-warm-stone/40 hover:text-copper transition-opacity p-1"
                       title="Supprimer la playlist"
                     >
@@ -260,11 +281,11 @@ export const LibraryView: React.FC = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-apex-white truncate">
+                  <h3 className="text-sm font-semibold text-apex-white truncate group-hover:text-champagne transition-colors">
                     {pl.name}
                   </h3>
                   <p className="text-[11px] text-warm-stone/60 truncate mt-0.5">
-                    {pl.trackIds.length} titre{pl.trackIds.length > 1 ? 's' : ''}
+                    {pl.tracks?.length || pl.trackIds.length} titre{(pl.tracks?.length || pl.trackIds.length) > 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
