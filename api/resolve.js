@@ -195,8 +195,7 @@ function desDecryptECB(base64Cipher, keyStr = '38346591') {
   }
 }
 
-function isJioMatch(song, expectedArtist, expectedTitle) {
-  if (!expectedArtist && !expectedTitle) return true;
+function isJioMatch(song, expectedArtist, expectedTitle, searchQuery) {
   const songTitle = (song.song || song.title || '').toLowerCase();
   const songArtist = (song.primary_artists || song.singers || '').toLowerCase();
 
@@ -205,6 +204,23 @@ function isJioMatch(song, expectedArtist, expectedTitle) {
     const hasArtist = artistTokens.some((tok) => songArtist.includes(tok) || songTitle.includes(tok));
     if (!hasArtist) return false;
   }
+
+  if (expectedTitle) {
+    const cleanTitle = expectedTitle.toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').trim();
+    const titleTokens = cleanTitle.split(/[\s,]+/).filter((w) => w.length > 2);
+    if (titleTokens.length > 0) {
+      const hasTitle = titleTokens.some((tok) => songTitle.includes(tok));
+      if (!hasTitle) return false;
+    }
+  }
+
+  // If no explicit artist or title was supplied, ensure that at least one significant query term matches the song
+  if (!expectedArtist && !expectedTitle && searchQuery) {
+    const queryTokens = searchQuery.toLowerCase().split(/[\s,]+/).filter((w) => w.length > 2);
+    const matchesAny = queryTokens.some((tok) => songTitle.includes(tok) || songArtist.includes(tok));
+    if (!matchesAny) return false;
+  }
+
   return true;
 }
 
@@ -226,7 +242,7 @@ async function resolveJioSaavn(searchQuery, expectedArtist, expectedTitle) {
     const results = data?.results || [];
 
     for (const song of results) {
-      if (song.encrypted_media_url && isJioMatch(song, expectedArtist, expectedTitle)) {
+      if (song.encrypted_media_url && isJioMatch(song, expectedArtist, expectedTitle, searchQuery)) {
         const dec = desDecryptECB(song.encrypted_media_url);
         if (dec && dec.startsWith('http')) {
           const streamUrl = dec.replace(/_96\.(mp4|m4a)/i, '_320.$1');
@@ -370,7 +386,7 @@ export default async function handler(req, res) {
   const searchQuery = String(q || `${artist || ''} ${title || ''}`).trim();
   if (!searchQuery) return res.status(400).json({ error: 'Paramètre q manquant' });
 
-  const key = `resolve:${normalize(searchQuery)}`;
+  const key = `resolve:${normalize(searchQuery)}:${normalize(artist || '')}:${normalize(title || '')}`;
   const hit = memory.get(key);
   if (hit && hit.expires > Date.now()) {
     res.setHeader('Cache-Control', CACHE_CONTROL);

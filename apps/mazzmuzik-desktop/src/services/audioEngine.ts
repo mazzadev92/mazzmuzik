@@ -7,6 +7,10 @@ export const isIOS =
   (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
+// Tiny 504-byte valid silent MP3 loop used to anchor iOS AVAudioSession in .playback mode
+const SILENT_AUDIO_URI =
+  'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAAPAAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAFAAAAPAAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc';
+
 export class AudioEngine {
   private static instance: AudioEngine | null = null;
 
@@ -53,6 +57,32 @@ export class AudioEngine {
     // The graph is only built on iOS once the user actually moves an equalizer band (see enableGraphOnIOS).
     this.audioA = this.createDeck('A', !isIOS);
     this.audioB = this.createDeck('B', !isIOS);
+    this.enableAudioSession();
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (this.currentMode === 'youtube' && this.ytPlayer) {
+          if (document.hidden) {
+            // Keep silent audio anchor alive and command YouTube player to keep playing in background
+            this.audioA.play().catch(() => {});
+            try {
+              this.ytPlayer.playVideo();
+            } catch {}
+          }
+        }
+      });
+    }
+  }
+
+  /** Activates iOS AVAudioSession in playback mode (bypasses silent switch and lock-screen suspension) */
+  public enableAudioSession(): void {
+    if (typeof navigator !== 'undefined' && 'audioSession' in navigator) {
+      try {
+        (navigator as any).audioSession.type = 'playback';
+      } catch (err) {
+        // Ignored if unsupported
+      }
+    }
   }
 
   private createDeck(deck: 'A' | 'B', cors: boolean): HTMLAudioElement {
@@ -183,38 +213,40 @@ export class AudioEngine {
 
   private setupAudioListeners(audio: HTMLAudioElement, deck: 'A' | 'B') {
     audio.addEventListener('timeupdate', () => {
-      if (this.activeDeck === deck && this.onTimeUpdateCallback) {
+      if (this.currentMode === 'audio' && this.activeDeck === deck && this.onTimeUpdateCallback) {
         this.onTimeUpdateCallback(audio.currentTime, audio.duration || 0);
       }
     });
 
     audio.addEventListener('ended', () => {
-      if (this.activeDeck === deck && this.onTrackEndedCallback) {
+      if (this.currentMode === 'audio' && this.activeDeck === deck && this.onTrackEndedCallback) {
         this.onTrackEndedCallback();
       }
     });
 
     audio.addEventListener('play', () => {
-      if (this.activeDeck === deck && this.onPlayStateChangeCallback) {
+      if (this.currentMode === 'audio' && this.activeDeck === deck && this.onPlayStateChangeCallback) {
         this.onPlayStateChangeCallback(true);
       }
     });
 
     audio.addEventListener('pause', () => {
-      if (this.activeDeck === deck && this.onPlayStateChangeCallback) {
+      if (this.currentMode === 'audio' && this.activeDeck === deck && this.onPlayStateChangeCallback) {
         this.onPlayStateChangeCallback(false);
       }
     });
 
     audio.addEventListener('waiting', () => {
-      if (this.activeDeck === deck) this.onBufferingCallback?.(true);
+      if (this.currentMode === 'audio' && this.activeDeck === deck) this.onBufferingCallback?.(true);
     });
     audio.addEventListener('playing', () => {
-      if (this.activeDeck === deck) this.onBufferingCallback?.(false);
+      if (this.currentMode === 'audio' && this.activeDeck === deck) this.onBufferingCallback?.(false);
     });
     audio.addEventListener('error', (e) => {
-      console.error(`[AudioEngine Deck ${deck}] Media Error:`, audio.error, e);
-      if (this.activeDeck === deck && audio.src) this.onErrorCallback?.();
+      if (this.currentMode === 'audio' && this.activeDeck === deck && audio.src) {
+        console.error(`[AudioEngine Deck ${deck}] Media Error:`, audio.error, e);
+        this.onErrorCallback?.();
+      }
     });
   }
 
@@ -263,7 +295,7 @@ export class AudioEngine {
     const container = document.getElementById('mazz-yt-player-container');
     if (!container) return;
     container.style.cssText =
-      'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
+      'position:fixed;left:-9999px;bottom:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;clip:rect(0,0,0,0);';
   }
 
   /** Initializes the YouTube embedded iframe engine for sovereign zero-cutoff playback */
@@ -278,7 +310,7 @@ export class AudioEngine {
         container = document.createElement('div');
         container.id = 'mazz-yt-player-container';
         container.style.cssText =
-          'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
+          'position:fixed;left:-9999px;bottom:-9999px;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;clip:rect(0,0,0,0);';
         const playerDiv = document.createElement('div');
         playerDiv.id = 'mazz-yt-player';
         container.appendChild(playerDiv);
@@ -312,7 +344,15 @@ export class AudioEngine {
                   this.onPlayStateChangeCallback?.(true);
                   this.onBufferingCallback?.(false);
                 } else if (e.data === 2) {
-                  this.onPlayStateChangeCallback?.(false);
+                  // If browser/iOS paused YouTube because screen is locked or tab is hidden, resume immediately!
+                  if (typeof document !== 'undefined' && document.hidden && this.currentMode === 'youtube') {
+                    this.audioA.play().catch(() => {});
+                    try {
+                      this.ytPlayer?.playVideo();
+                    } catch {}
+                  } else {
+                    this.onPlayStateChangeCallback?.(false);
+                  }
                 } else if (e.data === 3) {
                   this.onBufferingCallback?.(true);
                 } else if (e.data === 0) {
@@ -357,12 +397,22 @@ export class AudioEngine {
   /** Plays full studio audio track via the YouTube embedded engine (zero 30s limit) */
   public async playYouTube(videoId: string): Promise<void> {
     this.currentMode = 'youtube';
+    this.enableAudioSession();
 
-    // Stop and silence HTMLAudioElement decks
+    // Settle crossfade and stop Deck B
     this.playToken++;
     this.settleCrossfade();
-    this.audioA.pause();
     this.audioB.pause();
+    this.audioB.removeAttribute('src');
+
+    // Anchor iOS AVAudioSession in .playback mode using silent audio loop on audioA
+    try {
+      this.audioA.pause();
+      this.audioA.src = SILENT_AUDIO_URI;
+      this.audioA.loop = true;
+      this.audioA.volume = 0.001;
+      await this.audioA.play().catch(() => {});
+    } catch {}
 
     await this.initYouTubeApi();
 
@@ -402,6 +452,9 @@ export class AudioEngine {
 
   public async playTrack(url: string, crossfade = true): Promise<void> {
     this.currentMode = 'audio';
+    this.enableAudioSession();
+    this.audioA.loop = false;
+    this.audioB.loop = false;
     this.updateYouTubeContainerStyle(false);
     if (this.ytTimer) {
       clearInterval(this.ytTimer);
@@ -487,6 +540,8 @@ export class AudioEngine {
     this.settleCrossfade();
     this.audioA.pause();
     this.audioB.pause();
+    this.audioA.loop = false;
+    this.audioB.loop = false;
     if (this.ytTimer) {
       clearInterval(this.ytTimer);
       this.ytTimer = null;
@@ -501,6 +556,7 @@ export class AudioEngine {
   public pause(): void {
     if (this.currentMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try {
+        this.audioA.pause();
         this.ytPlayer.pauseVideo();
         this.onPlayStateChangeCallback?.(false);
       } catch {}
@@ -511,8 +567,10 @@ export class AudioEngine {
   }
 
   public resume(): void {
+    this.enableAudioSession();
     if (this.currentMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
       try {
+        this.audioA.play().catch(() => {});
         this.ytPlayer.playVideo();
         this.onPlayStateChangeCallback?.(true);
       } catch {}

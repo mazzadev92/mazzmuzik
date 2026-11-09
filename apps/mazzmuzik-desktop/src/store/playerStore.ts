@@ -56,7 +56,11 @@ function syncMediaSessionMetadata(track: Track) {
   try {
     const artwork = track.coverUrl
       ? [
-          { src: track.coverUrl, sizes: '300x300', type: 'image/jpeg' },
+          { src: track.coverUrl, sizes: '96x96', type: 'image/jpeg' },
+          { src: track.coverUrl, sizes: '128x128', type: 'image/jpeg' },
+          { src: track.coverUrl, sizes: '192x192', type: 'image/jpeg' },
+          { src: track.coverUrl, sizes: '256x256', type: 'image/jpeg' },
+          { src: track.coverUrl, sizes: '384x384', type: 'image/jpeg' },
           { src: track.coverUrl, sizes: '512x512', type: 'image/jpeg' },
         ]
       : [{ src: '/icon-512.png', sizes: '512x512', type: 'image/png' }];
@@ -67,6 +71,7 @@ function syncMediaSessionMetadata(track: Track) {
       album: track.album || 'MazzMuziK HiFi',
       artwork,
     });
+    navigator.mediaSession.playbackState = 'playing';
   } catch (err) {
     console.warn('MediaSession metadata sync error:', err);
   }
@@ -76,10 +81,18 @@ function setupMediaSessionActions(
   togglePlay: () => void,
   nextTrack: () => void,
   prevTrack: () => void,
-  seek: (sec: number) => void
+  seek: (sec: number) => void,
+  getCurrentTime: () => number,
+  getDuration: () => number
 ) {
   if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
   try {
+    if ('audioSession' in navigator) {
+      try {
+        (navigator as any).audioSession.type = 'playback';
+      } catch {}
+    }
+
     navigator.mediaSession.setActionHandler('play', () => {
       togglePlay();
     });
@@ -92,10 +105,21 @@ function setupMediaSessionActions(
     navigator.mediaSession.setActionHandler('nexttrack', () => {
       nextTrack();
     });
+    navigator.mediaSession.setActionHandler('stop', () => {
+      audioEngine.stop();
+    });
     navigator.mediaSession.setActionHandler('seekto', (details) => {
       if (details.seekTime != null) {
         seek(details.seekTime);
       }
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      const offset = details.seekOffset || 10;
+      seek(Math.max(0, getCurrentTime() - offset));
+    });
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      const offset = details.seekOffset || 10;
+      seek(Math.min(getDuration(), getCurrentTime() + offset));
     });
   } catch (err) {
     console.warn('MediaSession action handler setup error:', err);
@@ -163,7 +187,9 @@ export const usePlayerStore = create<PlayerState>()(
         () => get().togglePlay(),
         () => get().nextTrack(),
         () => get().prevTrack(),
-        (sec) => get().seek(sec)
+        (sec) => get().seek(sec),
+        () => get().currentTime,
+        () => get().duration
       );
 
       return {
