@@ -276,6 +276,49 @@ export async function searchYTMusic(query: string): Promise<Track[]> {
 }
 
 /**
+ * Resolves a YouTube Music video ID for any track title + artist in ~200ms
+ * Used by the Web / Mobile PWA player to stream the 100% full studio song with zero 30s limit.
+ */
+export async function resolveYouTubeVideoId(artist: string, title: string): Promise<string | null> {
+  const cleanTitle = cleanSongTitle(title);
+  const cleanArtist = (artist || '').replace(/(?:feat\.|ft\.).*$/i, '').trim();
+  const query = `${cleanArtist} ${cleanTitle}`.trim();
+  if (!query) return null;
+
+  try {
+    const body = {
+      context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20241127.01.00', hl: 'fr', gl: 'FR' } },
+      query,
+      params: 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D'
+    };
+    const endpoint = isTauri
+      ? 'https://music.youtube.com/youtubei/v1/search?prettyPrint=false'
+      : '/api/ytmusic/youtubei/v1/search?prettyPrint=false';
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const tabs = json?.contents?.tabbedSearchResultsRenderer?.tabs;
+    const sections = tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents;
+    for (const s of sections || []) {
+      const contents = s.musicShelfRenderer?.contents;
+      for (const item of contents || []) {
+        const r = item.musicResponsiveListItemRenderer;
+        const videoId = r?.playlistItemData?.videoId || r?.navigationEndpoint?.watchEndpoint?.videoId;
+        if (videoId) return videoId;
+      }
+    }
+  } catch (err) {
+    console.warn('resolveYouTubeVideoId error:', err);
+  }
+  return null;
+}
+
+/**
  * Executes a multi-source search in parallel via Promise.allSettled
  */
 export async function searchTracks(
@@ -502,13 +545,7 @@ async function doResolveTrackStream(track: Track): Promise<string> {
     console.warn('Audius fallback error:', err);
   }
 
-  // 6. Graceful fallback: Deezer preview if full studio stream is not yet resolved
-  if (track.previewUrl) {
-    streamCache.set(track.id, { url: track.previewUrl, time: Date.now() });
-    return track.previewUrl;
-  }
-
-  throw new Error(`Flux audio indisponible pour : ${track.title}`);
+  throw new Error(`Flux audio complet indisponible pour : ${track.title}`);
 }
 
 /**

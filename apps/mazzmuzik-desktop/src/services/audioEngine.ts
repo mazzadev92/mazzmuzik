@@ -22,6 +22,13 @@ export class AudioEngine {
   private playToken = 0;
   private iosGraphEnabled = false;
 
+  // Dual Playback Modes: HTML5 Audio vs YouTube Embedded Engine
+  private currentMode: 'audio' | 'youtube' = 'audio';
+  private ytPlayer: any = null;
+  private isYtReady = false;
+  private ytTimer: number | null = null;
+  private ytInitPromise: Promise<void> | null = null;
+
   // Web Audio Context & Processing Graph
   private audioCtx: AudioContext | null = null;
   private sourceA: MediaElementAudioSourceNode | null = null;
@@ -250,7 +257,148 @@ export class AudioEngine {
     this.setDeckLevel(this.activeDeck, 1);
   }
 
+  /** Initializes the YouTube embedded iframe engine for sovereign zero-cutoff playback */
+  private initYouTubeApi(): Promise<void> {
+    if (this.ytInitPromise) return this.ytInitPromise;
+
+    this.ytInitPromise = new Promise((resolve) => {
+      if (typeof window === 'undefined') return resolve();
+
+      let container = document.getElementById('mazz-yt-player-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'mazz-yt-player-container';
+        container.style.cssText =
+          'position:fixed;bottom:-9999px;left:-9999px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
+        const playerDiv = document.createElement('div');
+        playerDiv.id = 'mazz-yt-player';
+        container.appendChild(playerDiv);
+        document.body.appendChild(container);
+      }
+
+      const createPlayer = () => {
+        try {
+          this.ytPlayer = new (window as any).YT.Player('mazz-yt-player', {
+            height: '200',
+            width: '200',
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              playsinline: 1,
+              rel: 0,
+              origin: window.location.origin,
+            },
+            events: {
+              onReady: (e: any) => {
+                this.isYtReady = true;
+                try {
+                  e.target.setVolume(this.currentVolume * 100);
+                } catch {}
+                resolve();
+              },
+              onStateChange: (e: any) => {
+                if (e.data === 1) {
+                  this.onPlayStateChangeCallback?.(true);
+                  this.onBufferingCallback?.(false);
+                } else if (e.data === 2) {
+                  this.onPlayStateChangeCallback?.(false);
+                } else if (e.data === 3) {
+                  this.onBufferingCallback?.(true);
+                } else if (e.data === 0) {
+                  this.onTrackEndedCallback?.();
+                }
+              },
+              onError: (e: any) => {
+                console.warn('YouTube Player error code:', e.data);
+                this.onErrorCallback?.();
+              },
+            },
+          });
+        } catch (err) {
+          console.warn('Failed to create YT.Player:', err);
+          resolve();
+        }
+      };
+
+      if ((window as any).YT && (window as any).YT.Player) {
+        createPlayer();
+      } else {
+        const prev = (window as any).onYouTubeIframeAPIReady;
+        (window as any).onYouTubeIframeAPIReady = () => {
+          if (typeof prev === 'function') prev();
+          createPlayer();
+        };
+
+        if (!document.getElementById('yt-iframe-api-script')) {
+          const script = document.createElement('script');
+          script.id = 'yt-iframe-api-script';
+          script.src = 'https://www.youtube.com/iframe_api';
+          document.head.appendChild(script);
+        }
+      }
+    });
+
+    return this.ytInitPromise;
+  }
+
+  /** Plays full studio audio track via the YouTube embedded engine (zero 30s limit) */
+  public async playYouTube(videoId: string): Promise<void> {
+    this.currentMode = 'youtube';
+
+    // Stop and silence HTMLAudioElement decks
+    this.playToken++;
+    this.settleCrossfade();
+    this.audioA.pause();
+    this.audioB.pause();
+
+    await this.initYouTubeApi();
+
+    if (!this.ytPlayer || !this.isYtReady) {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
+    if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+      try {
+        this.ytPlayer.loadVideoById({ videoId, startSeconds: 0 });
+        this.ytPlayer.playVideo();
+        this.ytPlayer.setVolume(this.currentVolume * 100);
+      } catch (err) {
+        console.warn('playYouTube load error:', err);
+      }
+    }
+
+    if (this.ytTimer) clearInterval(this.ytTimer);
+    this.ytTimer = window.setInterval(() => {
+      if (
+        this.currentMode === 'youtube' &&
+        this.ytPlayer &&
+        typeof this.ytPlayer.getCurrentTime === 'function'
+      ) {
+        try {
+          const curr = this.ytPlayer.getCurrentTime() || 0;
+          const dur = this.ytPlayer.getDuration() || 0;
+          if (dur > 0) {
+            this.onTimeUpdateCallback?.(curr, dur);
+          }
+        } catch {}
+      }
+    }, 250);
+  }
+
   public async playTrack(url: string, crossfade = true): Promise<void> {
+    this.currentMode = 'audio';
+    if (this.ytTimer) {
+      clearInterval(this.ytTimer);
+      this.ytTimer = null;
+    }
+    if (this.ytPlayer && typeof this.ytPlayer.stopVideo === 'function') {
+      try {
+        this.ytPlayer.stopVideo();
+      } catch {}
+    }
+
     const token = ++this.playToken;
     this.initWebAudio();
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
@@ -325,14 +473,37 @@ export class AudioEngine {
     this.settleCrossfade();
     this.audioA.pause();
     this.audioB.pause();
+    if (this.ytTimer) {
+      clearInterval(this.ytTimer);
+      this.ytTimer = null;
+    }
+    if (this.ytPlayer && typeof this.ytPlayer.stopVideo === 'function') {
+      try {
+        this.ytPlayer.stopVideo();
+      } catch {}
+    }
   }
 
   public pause(): void {
+    if (this.currentMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+      try {
+        this.ytPlayer.pauseVideo();
+        this.onPlayStateChangeCallback?.(false);
+      } catch {}
+      return;
+    }
     this.settleCrossfade();
     this.deckAudio(this.activeDeck).pause();
   }
 
   public resume(): void {
+    if (this.currentMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+      try {
+        this.ytPlayer.playVideo();
+        this.onPlayStateChangeCallback?.(true);
+      } catch {}
+      return;
+    }
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
       void this.audioCtx.resume();
     }
@@ -342,6 +513,12 @@ export class AudioEngine {
   }
 
   public seek(seconds: number): void {
+    if (this.currentMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
+      try {
+        this.ytPlayer.seekTo(seconds, true);
+      } catch {}
+      return;
+    }
     const activeAudio = this.deckAudio(this.activeDeck);
     if (Number.isFinite(seconds) && activeAudio.duration) {
       activeAudio.currentTime = Math.max(0, Math.min(seconds, activeAudio.duration));
@@ -350,6 +527,11 @@ export class AudioEngine {
 
   public setVolume(vol: number): void {
     this.currentVolume = Math.max(0, Math.min(1, vol));
+    if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+      try {
+        this.ytPlayer.setVolume(this.currentVolume * 100);
+      } catch {}
+    }
     if (this.masterGain && this.audioCtx) {
       this.masterGain.gain.setValueAtTime(this.currentVolume, this.audioCtx.currentTime);
     } else if (!isIOS) {
@@ -380,15 +562,21 @@ export class AudioEngine {
   }
 
   public getFrequencyData(): Uint8Array {
-    if (this.analyser && this.isWebAudioReady) {
+    if (this.analyser && this.isWebAudioReady && this.currentMode === 'audio') {
       this.analyser.getByteFrequencyData(this.freqData);
       return this.freqData;
     }
 
-    // Dynamic wave simulation fallback
+    // Dynamic wave simulation for YouTube mode and fallback
     const data = new Uint8Array(128);
-    const activeAudio = this.activeDeck === 'A' ? this.audioA : this.audioB;
-    if (!activeAudio.paused && this.currentVolume > 0) {
+    const isPlaying =
+      this.currentMode === 'youtube'
+        ? this.ytPlayer &&
+          typeof this.ytPlayer.getPlayerState === 'function' &&
+          this.ytPlayer.getPlayerState() === 1
+        : !this.deckAudio(this.activeDeck).paused;
+
+    if (isPlaying && this.currentVolume > 0) {
       const t = Date.now() / 120;
       for (let i = 0; i < 128; i++) {
         const val =
