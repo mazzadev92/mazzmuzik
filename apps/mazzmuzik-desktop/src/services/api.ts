@@ -488,8 +488,13 @@ async function doResolveTrackStream(track: Track): Promise<string> {
     console.warn('Audius fallback error:', err);
   }
 
-  // No 30 s preview fallback: only full-length streams are played.
-  throw new Error(`Version complète indisponible : ${track.title}`);
+  // 6. Graceful fallback: Deezer preview if full studio stream is not yet resolved
+  if (track.previewUrl) {
+    streamCache.set(track.id, { url: track.previewUrl, time: Date.now() });
+    return track.previewUrl;
+  }
+
+  throw new Error(`Flux audio indisponible pour : ${track.title}`);
 }
 
 /**

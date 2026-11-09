@@ -1,11 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "mazzmuzik-desktop": {
-      "root": "apps/mazzmuzik-desktop",
-      "framework": "vite"
-    }
-  },
   "rewrites": [
     {
       "source": "/api/deezer/:match*",
@@ -20,10 +14,8 @@
       "destination": "https://lrclib.net/:match*"
     },
     {
-      "source": "/(.*)",
-      "destination": {
-        "service": "mazzmuzik-desktop"
-      }
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
