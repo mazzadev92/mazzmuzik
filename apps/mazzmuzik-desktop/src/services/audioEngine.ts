@@ -257,26 +257,13 @@ export class AudioEngine {
     this.setDeckLevel(this.activeDeck, 1);
   }
 
-  /** Updates the YouTube video PiP container visibility and styling */
-  private updateYouTubeContainerStyle(visible: boolean) {
+  /** Keeps YouTube player running completely invisibly in background (audio-only, zero visual popup) */
+  private updateYouTubeContainerStyle(_visible: boolean) {
     if (typeof window === 'undefined') return;
     const container = document.getElementById('mazz-yt-player-container');
     if (!container) return;
-    if (visible) {
-      const isMobile = window.innerWidth < 768;
-      container.style.cssText = isMobile
-        ? 'position:fixed;bottom:72px;right:8px;width:160px;height:90px;border-radius:8px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.8);border:1px solid rgba(201,165,122,0.4);background:#090D0A;z-index:40;opacity:1;pointer-events:auto;transition:all 0.3s ease;'
-        : 'position:fixed;bottom:96px;right:20px;width:256px;height:144px;border-radius:10px;overflow:hidden;box-shadow:0 12px 36px rgba(0,0,0,0.85);border:1px solid rgba(201,165,122,0.45);background:#090D0A;z-index:40;opacity:1;pointer-events:auto;transition:all 0.3s ease;';
-      const iframe = container.querySelector('iframe');
-      if (iframe) {
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-      }
-    } else {
-      container.style.cssText =
-        'position:fixed;bottom:-9999px;left:-9999px;width:10px;height:10px;opacity:0;pointer-events:none;z-index:-999;display:none;';
-    }
+    container.style.cssText =
+      'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
   }
 
   /** Initializes the YouTube embedded iframe engine for sovereign zero-cutoff playback */
@@ -291,7 +278,7 @@ export class AudioEngine {
         container = document.createElement('div');
         container.id = 'mazz-yt-player-container';
         container.style.cssText =
-          'position:fixed;bottom:-9999px;left:-9999px;width:10px;height:10px;opacity:0;pointer-events:none;z-index:-999;display:none;';
+          'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
         const playerDiv = document.createElement('div');
         playerDiv.id = 'mazz-yt-player';
         container.appendChild(playerDiv);
@@ -301,13 +288,13 @@ export class AudioEngine {
       const createPlayer = () => {
         try {
           this.ytPlayer = new (window as any).YT.Player('mazz-yt-player', {
-            height: '100%',
-            width: '100%',
+            height: '1',
+            width: '1',
             playerVars: {
               autoplay: 1,
-              controls: 1,
-              disablekb: 0,
-              fs: 1,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
               playsinline: 1,
               rel: 0,
               origin: window.location.origin,
@@ -383,7 +370,7 @@ export class AudioEngine {
       await new Promise((r) => setTimeout(r, 300));
     }
 
-    this.updateYouTubeContainerStyle(true);
+    this.updateYouTubeContainerStyle(false);
 
     if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
       try {
