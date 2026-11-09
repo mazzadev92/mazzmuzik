@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Sparkles, Radio, Music, Flame, Clock } from 'lucide-react';
+import { Play, Radio, Music, Flame, Clock } from 'lucide-react';
 import { usePlayerStore } from '../store/playerStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { getTrendingAudius, getTopRadios } from '../services/api';
@@ -66,22 +66,6 @@ export const HomeView: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 md:space-y-8 custom-scrollbar">
-      {/* Hero Banner */}
-      <div className="relative rounded-2xl bg-gradient-to-r from-surface to-surface-hi border border-border p-5 md:p-8 overflow-hidden shadow-xl">
-        <div className="relative z-10 max-w-xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-hi border border-border text-champagne text-xs font-mono">
-            <Sparkles size={13} />
-            <span>MazzMuziK Audio Engine</span>
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-apex-white">
-            Expérience Haute-Fidélité Sans Frontières.
-          </h1>
-          <p className="text-sm text-warm-stone/80 leading-relaxed">
-            Streaming audio pur, multi-sources décentralisé, sans compte et sans publicité. Égaliseur 10 bandes et shaders audio temps réel.
-          </p>
-        </div>
-      </div>
-
       {/* Récemment écoutés */}
       {recentTracks.length > 0 && (
         <section className="space-y-4">

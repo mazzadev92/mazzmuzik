@@ -12,6 +12,7 @@ interface PlayerState {
   queueIndex: number;
   isPlaying: boolean;
   playbackState: PlaybackState;
+  playbackError: string | null;
   currentTime: number;
   duration: number;
   volume: number;
@@ -171,6 +172,7 @@ export const usePlayerStore = create<PlayerState>()(
         queueIndex: -1,
         isPlaying: false,
         playbackState: 'idle' as PlaybackState,
+        playbackError: null as string | null,
         currentTime: 0,
         duration: 0,
         volume: 0.8,
@@ -191,6 +193,7 @@ export const usePlayerStore = create<PlayerState>()(
                     // Show the new track instantly (0 ms perceived), whatever the previous state was.
           fire('REQUEST');
           set({
+            playbackError: null,
             currentTrack: track,
             isPlaying: true,
             isLoadingTrack: true,
@@ -247,7 +250,11 @@ export const usePlayerStore = create<PlayerState>()(
             if (gate.isStale(token)) return;
             console.error('Failed to resolve and play track:', err);
             fire('FAIL');
-            set({ isPlaying: false, isLoadingTrack: false });
+            set({
+              isPlaying: false,
+              isLoadingTrack: false,
+              playbackError: err instanceof Error ? err.message : 'Lecture impossible',
+            });
           }
         },
 

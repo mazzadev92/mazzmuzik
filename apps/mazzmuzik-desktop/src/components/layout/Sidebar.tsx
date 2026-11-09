@@ -54,11 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               <span className="font-semibold text-apex-white text-base tracking-wide">
                 MazzMuziK
               </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-hi border border-border text-champagne font-mono">
-                v1.0
-              </span>
             </div>
-            <span className="text-xs text-warm-stone/60">Bioforge Leaf Edition</span>
           </div>
         </div>
 
@@ -109,15 +105,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             <Sparkles size={14} className="text-champagne animate-spin" />
           )}
         </button>
-
-        {/* Sidecar status indicator */}
-        <div className="px-3 py-2 rounded-md bg-obsidian border border-border flex items-center justify-between text-[11px] text-warm-stone/60">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-sage shadow-[0_0_8px_rgba(148,184,154,0.6)]" />
-            <span>Moteurs Locaux Actifs</span>
-          </div>
-          <span className="text-[10px] text-sage font-mono">6/6 Sidecars</span>
-        </div>
       </div>
     </aside>
   );

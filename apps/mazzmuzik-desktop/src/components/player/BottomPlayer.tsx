@@ -55,6 +55,7 @@ export const BottomPlayer: React.FC = () => {
     rightPanelView,
     isEqOpen,
     isLoadingTrack,
+    playbackError,
     openNowPlaying,
     togglePlay,
     prevTrack,
@@ -121,8 +122,10 @@ export const BottomPlayer: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <span className="text-[11px] md:text-xs text-warm-stone/70 truncate">
-                  {currentTrack.artist}
+                <span
+                  className={`text-[11px] md:text-xs truncate ${playbackError ? 'text-red-300/90' : 'text-warm-stone/70'}`}
+                >
+                  {playbackError ?? currentTrack.artist}
                 </span>
               </div>
             </div>

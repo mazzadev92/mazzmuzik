@@ -349,7 +349,40 @@ export async function searchTracks(
     }
   }
 
-  return results;
+  return dedupeTracks(results);
+}
+
+const fold = (v: string) =>
+  v
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * Same song from Deezer and YouTube Music: keep one row. The YouTube entry plays (exact videoId),
+ * the Deezer entry lends its cover and duration.
+ */
+function dedupeTracks(tracks: Track[]): Track[] {
+  const seen = new Map<string, number>();
+  const out: Track[] = [];
+  for (const t of tracks) {
+    const key = fold(t.artist) + '|' + fold(t.title);
+    const at = seen.get(key);
+    if (at === undefined) {
+      seen.set(key, out.length);
+      out.push(t);
+      continue;
+    }
+    const kept = out[at];
+    const [yt, dz] = kept.source === 'ytmusic' ? [kept, t] : [t, kept];
+    if (yt.source === 'ytmusic' && dz.source === 'deezer') {
+      out[at] = { ...yt, coverUrl: dz.coverUrl || yt.coverUrl, duration: dz.duration || yt.duration, album: dz.album || yt.album };
+    }
+  }
+  return out;
 }
 
 const LOCAL_PROXY_PORT = 28234;
@@ -455,13 +488,8 @@ async function doResolveTrackStream(track: Track): Promise<string> {
     console.warn('Audius fallback error:', err);
   }
 
-  // 6. Last resort fallback: Deezer 30s preview (only if offline or completely unresolvable)
-  if (track.previewUrl) {
-    streamCache.set(track.id, { url: track.previewUrl, time: Date.now() });
-    return track.previewUrl;
-  }
-
-  throw new Error(`Flux audio indisponible pour: ${track.title}`);
+  // No 30 s preview fallback: only full-length streams are played.
+  throw new Error(`Version complète indisponible : ${track.title}`);
 }
 
 /**
