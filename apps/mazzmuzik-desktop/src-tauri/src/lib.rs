@@ -521,7 +521,6 @@ async fn resolve_stream_url(
     app: AppHandle,
     source: String,
     query_or_id: String,
-    _arl: Option<String>,
     artist: Option<String>,
     title: Option<String>,
 ) -> Result<String, String> {

@@ -221,76 +221,16 @@ export const usePlayerStore = create<PlayerState>()(
           }
 
           try {
-            const { isTauri, resolveTrackStream, resolveYouTubeVideoId } = await import('../services/api');
+            const { resolveTrackStream, resolveYouTubeVideoId } = await import('../services/api');
 
-            // Strategy 1: Desktop Tauri (yt-dlp sidecar) or direct audio streams (Audius 320k, Live Radio)
-            if (isTauri || track.source === 'audius' || track.source === 'radio') {
-              let streamUrl = track.streamUrl;
-              if (!streamUrl) {
-                streamUrl = await resolveTrackStream(track);
-              }
-              if (gate.isStale(token)) return;
-
-              if (streamUrl) {
-                fire('RESOLVED');
-                const updatedTrack = { ...track, streamUrl };
-                set({ currentTrack: updatedTrack });
-                syncMediaSessionMetadata(updatedTrack);
-
-                await audioEngine.playTrack(streamUrl);
-                if (gate.isStale(token)) return;
-                set({ isPlaying: true, isLoadingTrack: false });
-                fire('CANPLAY');
-
-                const { queue, queueIndex } = get();
-                const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
-                if (upcoming.length > 0) {
-                  const { prefetchManager } = await import('../services/api');
-                  prefetchManager.enqueue(upcoming);
-                }
-                return;
-              }
-            }
-
-            // Strategy 2: Web & Mobile PWA (iOS / Android / Chrome)
-            // Resolve YouTube video ID to play 100% FULL studio song with ZERO 30s limitation
-            let videoId = track.source === 'ytmusic' ? track.id.replace('ytmusic-', '') : '';
-            if (
-              !videoId &&
-              (track.source === 'deezer' ||
-                track.source === 'spotify' ||
-                track.source === 'soundcloud' ||
-                track.source === 'bandcamp' ||
-                track.source === 'local')
-            ) {
-              videoId = (await resolveYouTubeVideoId(track.artist, track.title)) || '';
-            }
-
-            if (videoId) {
-              fire('RESOLVED');
-              const streamUrl = `https://www.youtube.com/watch?v=${videoId}`;
-              const updatedTrack = { ...track, streamUrl };
-              set({ currentTrack: updatedTrack });
-              syncMediaSessionMetadata(updatedTrack);
-
-              await audioEngine.playYouTube(videoId);
-              if (gate.isStale(token)) return;
-              set({ isPlaying: true, isLoadingTrack: false });
-              fire('CANPLAY');
-
-              const { queue, queueIndex } = get();
-              const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
-              if (upcoming.length > 0) {
-                const { prefetchManager } = await import('../services/api');
-                prefetchManager.enqueue(upcoming);
-              }
-              return;
-            }
-
-            // Strategy 3: Cloud stream fallback via Audius or serverless resolver
+            // 1. Direct High-Fidelity Stream Resolution (JioSaavn 320k, Desktop yt-dlp, Audius 320k, Live Radios)
             let streamUrl = track.streamUrl;
-            if (!streamUrl) {
-              streamUrl = await resolveTrackStream(track);
+            if (!streamUrl || track.source === 'deezer' || track.source === 'spotify') {
+              try {
+                streamUrl = await resolveTrackStream(track);
+              } catch (resErr) {
+                console.warn('Direct stream resolution warning, trying fallbacks:', resErr);
+              }
             }
             if (gate.isStale(token)) return;
 
@@ -302,12 +242,48 @@ export const usePlayerStore = create<PlayerState>()(
 
               await audioEngine.playTrack(streamUrl);
               if (gate.isStale(token)) return;
-              set({ isPlaying: true, isLoadingTrack: false });
+              set({ isPlaying: true, isLoadingTrack: false, playbackError: null });
               fire('CANPLAY');
+
+              const { queue, queueIndex } = get();
+              const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
+              if (upcoming.length > 0) {
+                const { prefetchManager } = await import('../services/api');
+                prefetchManager.enqueue(upcoming);
+              }
               return;
             }
 
-            throw new Error(`Flux introuvable pour : ${track.title}`);
+            // 2. Secondary Engine: YouTube video ID resolution for YouTube-only songs
+            let videoId = track.source === 'ytmusic' ? track.id.replace('ytmusic-', '') : '';
+            if (!videoId) {
+              try {
+                videoId = (await resolveYouTubeVideoId(track.artist, track.title)) || '';
+              } catch {}
+            }
+
+            if (videoId) {
+              fire('RESOLVED');
+              const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+              const updatedTrack = { ...track, streamUrl: ytUrl };
+              set({ currentTrack: updatedTrack });
+              syncMediaSessionMetadata(updatedTrack);
+
+              await audioEngine.playYouTube(videoId);
+              if (gate.isStale(token)) return;
+              set({ isPlaying: true, isLoadingTrack: false, playbackError: null });
+              fire('CANPLAY');
+
+              const { queue, queueIndex } = get();
+              const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
+              if (upcoming.length > 0) {
+                const { prefetchManager } = await import('../services/api');
+                prefetchManager.enqueue(upcoming);
+              }
+              return;
+            }
+
+            throw new Error(`Flux audio indisponible pour : ${track.title}`);
           } catch (err) {
             if (gate.isStale(token)) return;
             console.error('Failed to resolve and play track:', err);

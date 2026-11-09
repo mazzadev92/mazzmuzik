@@ -312,7 +312,9 @@ export class AudioEngine {
               },
               onError: (e: any) => {
                 console.warn('YouTube Player error code:', e.data);
-                this.onErrorCallback?.();
+                if (this.currentMode === 'youtube') {
+                  this.onErrorCallback?.();
+                }
               },
             },
           });
