@@ -6,8 +6,8 @@
       "destination": "https://api.deezer.com/:match*"
     },
     {
-      "source": "/api/ytmusic/:match*",
-      "destination": "https://music.youtube.com/:match*"
+      "source": "/api/ytmusic/(.*)",
+      "destination": "/api/ytmusic"
     },
     {
       "source": "/api/lyrics/:match*",

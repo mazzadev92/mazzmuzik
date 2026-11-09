@@ -212,6 +212,21 @@ export async function searchYTMusic(query: string): Promise<Track[]> {
     }
   }
 
+  // Fast Web PWA endpoint
+  if (!isTauri) {
+    try {
+      const res = await fetch(`/api/ytmusic?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.tracks) && json.tracks.length > 0) {
+          return json.tracks;
+        }
+      }
+    } catch (err) {
+      console.warn('Fast /api/ytmusic endpoint note:', err);
+    }
+  }
+
   // Fallback: direct InnerTube request via proxy when on browser
   try {
     const body = {
@@ -284,6 +299,29 @@ export async function resolveYouTubeVideoId(artist: string, title: string): Prom
   const cleanArtist = (artist || '').replace(/(?:feat\.|ft\.).*$/i, '').trim();
   const query = `${cleanArtist} ${cleanTitle}`.trim();
   if (!query) return null;
+
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const sidecarResults = await invoke<Track[]>('search_ytmusic', { query, filter: 'songs' });
+      if (Array.isArray(sidecarResults) && sidecarResults.length > 0) {
+        return sidecarResults[0].id.replace('ytmusic-', '');
+      }
+    } catch (err) {
+      console.warn('Tauri YT search error:', err);
+    }
+  }
+
+  // Fast Web PWA endpoint
+  try {
+    const res = await fetch(`/api/ytmusic?q=${encodeURIComponent(query)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.bestVideoId) return data.bestVideoId;
+    }
+  } catch (err) {
+    console.warn('resolveYouTubeVideoId fast endpoint error, trying raw proxy:', err);
+  }
 
   try {
     const body = {

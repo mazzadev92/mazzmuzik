@@ -236,6 +236,40 @@ export const usePlayerStore = create<PlayerState>()(
 
             if (streamUrl) {
               fire('RESOLVED');
+              const isYouTube =
+                streamUrl.includes('youtube.com') ||
+                streamUrl.includes('youtu.be') ||
+                track.source === 'ytmusic';
+
+              if (isYouTube) {
+                const match = streamUrl.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+                const videoId = match
+                  ? match[1]
+                  : track.source === 'ytmusic'
+                  ? track.id.replace('ytmusic-', '')
+                  : '';
+
+                if (videoId) {
+                  const updatedTrack = { ...track, streamUrl: `https://www.youtube.com/watch?v=${videoId}` };
+                  set({ currentTrack: updatedTrack });
+                  syncMediaSessionMetadata(updatedTrack);
+
+                  await audioEngine.playYouTube(videoId);
+                  if (gate.isStale(token)) return;
+                  set({ isPlaying: true, isLoadingTrack: false, playbackError: null });
+                  fire('CANPLAY');
+
+                  const { queue, queueIndex } = get();
+                  const upcoming = queue.slice(queueIndex + 1, queueIndex + 5);
+                  if (upcoming.length > 0) {
+                    const { prefetchManager } = await import('../services/api');
+                    prefetchManager.enqueue(upcoming);
+                  }
+                  return;
+                }
+              }
+
+              // Direct audio file (JioSaavn 320k, Audius 320k, local proxy, Radio)
               const updatedTrack = { ...track, streamUrl };
               set({ currentTrack: updatedTrack });
               syncMediaSessionMetadata(updatedTrack);
