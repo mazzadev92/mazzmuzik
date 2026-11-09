@@ -20,6 +20,7 @@ export class AudioEngine {
   private crossfadeTimer: number | null = null;
   private fadingOutDeck: 'A' | 'B' | null = null;
   private playToken = 0;
+  private iosGraphEnabled = false;
 
   // Web Audio Context & Processing Graph
   private audioCtx: AudioContext | null = null;
@@ -41,28 +42,54 @@ export class AudioEngine {
   private onErrorCallback?: () => void;
 
   private constructor() {
-    this.audioA = new Audio();
-    this.audioB = new Audio();
+    // iOS: direct hardware output (no CORS attribute, no Web Audio graph) keeps lock-screen audio alive.
+    // The graph is only built on iOS once the user actually moves an equalizer band (see enableGraphOnIOS).
+    this.audioA = this.createDeck('A', !isIOS);
+    this.audioB = this.createDeck('B', !isIOS);
+  }
 
-    // Critical iOS lockscreen & background audio configuration:
-    // On iOS Safari, crossOrigin can trigger strict CORS failures on remote audio streams,
-    // and createMediaElementSource mutes when locked.
-    if (!isIOS) {
-      this.audioA.crossOrigin = 'anonymous';
-      this.audioB.crossOrigin = 'anonymous';
+  private createDeck(deck: 'A' | 'B', cors: boolean): HTMLAudioElement {
+    const audio = new Audio();
+    if (cors) audio.crossOrigin = 'anonymous'; // required by createMediaElementSource
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
+    audio.preload = 'auto';
+    audio.volume = this.currentVolume;
+    this.setupAudioListeners(audio, deck);
+    return audio;
+  }
+
+  /** iOS only: swap both decks for CORS-enabled elements so they can enter the EQ graph, keeping position. */
+  private enableGraphOnIOS(): void {
+    if (this.iosGraphEnabled) return;
+    this.iosGraphEnabled = true;
+    const old = this.deckAudio(this.activeDeck);
+    const src = old.src;
+    const time = old.currentTime;
+    const wasPlaying = !old.paused;
+    this.playToken++;
+    this.settleCrossfade();
+    for (const el of [this.audioA, this.audioB]) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
     }
-    this.audioA.setAttribute('playsinline', 'true');
-    this.audioB.setAttribute('playsinline', 'true');
-    this.audioA.setAttribute('webkit-playsinline', 'true');
-    this.audioB.setAttribute('webkit-playsinline', 'true');
-
-    this.audioA.preload = 'auto';
-    this.audioB.preload = 'auto';
-    this.audioA.volume = this.currentVolume;
-    this.audioB.volume = this.currentVolume;
-
-    this.setupAudioListeners(this.audioA, 'A');
-    this.setupAudioListeners(this.audioB, 'B');
+    this.audioA = this.createDeck('A', true);
+    this.audioB = this.createDeck('B', true);
+    this.activeDeck = 'A';
+    this.initWebAudio();
+    if (src) {
+      const el = this.audioA;
+      el.src = src;
+      el.addEventListener(
+        'loadedmetadata',
+        () => {
+          if (Number.isFinite(time)) el.currentTime = time;
+          if (wasPlaying) el.play().catch((err) => console.warn('EQ graph resume error:', err));
+        },
+        { once: true }
+      );
+    }
   }
 
   public static getInstance(): AudioEngine {
@@ -79,7 +106,7 @@ export class AudioEngine {
     // When an HTMLAudioElement is captured via createMediaElementSource in iOS WebKit,
     // iOS silences all Web Audio destinations as soon as the screen locks or app backgrounds.
     // Direct hardware audio output is mandatory on iOS for lockscreen playback.
-    if (isIOS) {
+    if (isIOS && !this.iosGraphEnabled) {
       return;
     }
     try {
@@ -241,7 +268,7 @@ export class AudioEngine {
     // iOS ignores HTMLMediaElement.volume (read-only) so a real crossfade is impossible there.
     const useCrossfade =
       crossfade &&
-      !isIOS &&
+      (this.isWebAudioReady || !isIOS) &&
       this.crossfadeTime > 0 &&
       !prevAudio.paused &&
       Boolean(prevAudio.src);
@@ -336,6 +363,7 @@ export class AudioEngine {
 
   public setEqualizerGains(gains: number[]): void {
     this.currentGains = [...gains];
+    if (isIOS && !this.iosGraphEnabled && gains.some((g) => g !== 0)) this.enableGraphOnIOS();
     this.initWebAudio();
     if (!this.audioCtx || this.filters.length === 0) return;
 
